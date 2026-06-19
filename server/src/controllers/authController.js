@@ -77,7 +77,7 @@ export const register = async (req, res) => {
         id: true, name: true, email: true, phoneNumber: true,
         age: true, gender: true, country: true, knoccPrice: true,
         verified: true, walletBalance: true, createdAt: true,
-        autoApprove: true, requireReason: true,
+        autoApprove: true, requireReason: true, chatExpiryMonths: true,
       },
     });
 

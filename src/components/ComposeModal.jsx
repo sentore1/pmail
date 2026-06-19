@@ -115,19 +115,22 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
   // ── Pre-populate for reply / forward ─────────────────────────────────────
   useEffect(() => {
     if (replyTo) {
-      // The person we're replying to is already on Pmail (we got their email),
-      // so mark them as approved — no Knocc payment needed
-      if (replyTo.senderEmail) {
+      // The person we're replying to is already on Pmail (we received from them),
+      // so mark them as approved — no Knocc payment needed.
+      const recipientEmail = replyTo.senderEmail || ''
+      const recipientName  = replyTo.senderName  || recipientEmail
+
+      if (recipientEmail) {
         setRecipients([{
-          email:      replyTo.senderEmail,
-          name:       replyTo.senderName || replyTo.senderEmail,
+          email:      recipientEmail,
+          name:       recipientName,
           approved:   true,   // they're on Pmail — we received from them
           knoccPrice: 0,
         }])
       }
       setSubject(replyTo.subject?.startsWith('Re:') ? replyTo.subject : `Re: ${replyTo.subject || ''}`)
       const quoted = `<br/><br/><blockquote style="border-left:3px solid #d1d5db;padding-left:12px;color:#6b7280;margin:0">`
-        + `<p style="margin:0 0 4px;font-size:12px;color:#9ca3af">On ${replyTo.date || ''}, ${replyTo.senderName || replyTo.senderEmail} wrote:</p>`
+        + `<p style="margin:0 0 4px;font-size:12px;color:#9ca3af">On ${replyTo.date || ''}, ${recipientName} wrote:</p>`
         + (replyTo.body || '')
         + `</blockquote>`
       setTimeout(() => {
@@ -390,8 +393,53 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     setShowBccSuggestions(false)
   }
 
+  // ── Bake form field values into the DOM before serializing ───────────────
+  // ── Bake form field values into a CLONE of the DOM, then serialize ────────
+  // We never mutate the live contenteditable — we clone it first, stamp values
+  // on the clone, then read innerHTML from the clone. This avoids any crash from
+  // el.textContent or setAttribute side-effects on the live editor tree.
+  const bakeFormValues = () => {
+    if (!messageRef.current) return message
+
+    // Deep-clone the editor contents so we don't touch the live DOM
+    const clone = messageRef.current.cloneNode(true)
+
+    // <input> — stamp value attribute on the clone
+    clone.querySelectorAll('input').forEach((el) => {
+      // Find the matching live input by position to get its current .value
+      const allInputs = Array.from(messageRef.current.querySelectorAll('input'))
+      const allCloneInputs = Array.from(clone.querySelectorAll('input'))
+      const idx = allCloneInputs.indexOf(el)
+      const liveValue = allInputs[idx]?.value ?? ''
+      el.setAttribute('value', liveValue)
+      if (liveValue) el.style.color = '#111827'
+    })
+
+    // <textarea> — use innerHTML (not textContent) to avoid wiping siblings
+    clone.querySelectorAll('textarea').forEach((el) => {
+      const allTA = Array.from(messageRef.current.querySelectorAll('textarea'))
+      const allCloneTA = Array.from(clone.querySelectorAll('textarea'))
+      const idx = allCloneTA.indexOf(el)
+      const liveValue = allTA[idx]?.value ?? ''
+      // Escape HTML special chars so the value is safe inside innerHTML
+      const escaped = liveValue
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+      el.innerHTML = escaped
+      if (liveValue) el.style.color = '#111827'
+    })
+
+    const baked = clone.innerHTML
+    setMessage(baked)
+    return baked
+  }
+
   // ── Validate recipient before send ───────────────────────────────────────
   const validateAndSend = () => {
+    // Bake form field values into HTML first — returns the live body to use directly
+    const bodyHTML = bakeFormValues()
+
     // Auto-commit any text still sitting in the input field
     let finalRecipients = [...recipients]
     if (recipientInput.trim()) {
@@ -407,7 +455,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
 
     if (finalRecipients.length === 0) { setError('Please enter at least one recipient'); return }
     if (!subject.trim()) { setError('Please enter a subject'); return }
-    if (!message.trim()) { setError('Please enter a message'); return }
+    if (!bodyHTML?.trim()) { setError('Please enter a message'); return }
 
     // Check if any recipient requires Knocc payment
     const unapprovedRecipients = finalRecipients.filter(r => !r.approved && r.email.includes('@'))
@@ -416,21 +464,22 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
       setShowKnoccPayment(true)
       return
     }
-    handleSend(finalRecipients)
+    handleSend(finalRecipients, bodyHTML)
   }
 
   // ── Send email ────────────────────────────────────────────────────────────
-  const handleSend = async (overrideRecipients) => {
+  const handleSend = async (overrideRecipients, overrideBody) => {
     setLoading(true)
     setError('')
     try {
       const toList = (overrideRecipients || recipients).map(r => r.email)
+      const bodyToSend = overrideBody ?? message
       const emailData = {
         to: toList,
         cc: cc ? cc.split(',').map((e) => e.trim()).filter(Boolean) : [],
         bcc: bcc ? bcc.split(',').map((e) => e.trim()).filter(Boolean) : [],
         subject,
-        body: message,
+        body: bodyToSend,
         attachments,
       }
       const res = await emailAPI.sendEmail(emailData)
@@ -557,20 +606,28 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
   ]
 
   const buildFormHTML = (template) => {
-    const fs = `style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box;background:#fff;"`
-    const ls = `style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:2px;"`
-    const ws = `style="margin-bottom:14px;"`
+    const inputStyle = `style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box;background:#fff;color:#374151;"`
+    const labelStyle = `style="display:block;font-size:12px;font-weight:600;color:#374151;margin-bottom:2px;"`
+    const wrapStyle  = `style="margin-bottom:14px;"`
     let html = `<div style="font-family:sans-serif;max-width:520px;padding:20px;background:#f9fafb;border-radius:12px;border:1px solid #e5e7eb;">`
     html += `<p style="font-size:16px;font-weight:700;color:#111827;margin:0 0 16px 0;">${template.name}</p>`
     template.fields.forEach((field) => {
-      html += `<div ${ws}><label ${ls}>${field.label}</label>`
-      if (field.type === 'textarea') html += `<textarea ${fs} rows="3" placeholder="${field.placeholder}"></textarea>`
-      else if (field.type === 'select') html += `<select ${fs}>${field.options.map((o) => `<option>${o}</option>`).join('')}</select>`
-      else if (field.type === 'radio') html += `<div style="margin-top:6px;">${field.options.map((o) => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#374151;margin-bottom:4px;"><input type="radio" name="${field.label.replace(/\s/g,'_')}" style="accent-color:#2563eb"> ${o}</label>`).join('')}</div>`
-      else html += `<input type="${field.type}" placeholder="${field.placeholder||''}" ${fs}>`
+      html += `<div ${wrapStyle}><label ${labelStyle}>${field.label}</label>`
+      if (field.type === 'textarea') {
+        // Use visible placeholder text as content, styled gray — works inside contenteditable
+        html += `<textarea ${inputStyle} rows="3" style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box;background:#fff;color:#9ca3af;">${field.placeholder}</textarea>`
+      } else if (field.type === 'select') {
+        html += `<select ${inputStyle}>${field.options.map((o) => `<option>${o}</option>`).join('')}</select>`
+      } else if (field.type === 'radio') {
+        html += `<div style="margin-top:6px;">${field.options.map((o) => `<label style="display:flex;align-items:center;gap:6px;font-size:13px;color:#374151;margin-bottom:4px;"><input type="radio" name="${field.label.replace(/\s/g,'_')}" style="accent-color:#2563eb"> ${o}</label>`).join('')}</div>`
+      } else {
+        // Render placeholder as value with gray color — visible in the composer preview
+        html += `<input type="${field.type}" value="${field.placeholder || ''}" ${inputStyle} style="width:100%;padding:8px 12px;border:1px solid #d1d5db;border-radius:8px;font-size:14px;margin-top:4px;box-sizing:border-box;background:#fff;color:#9ca3af;">`
+      }
       html += `</div>`
     })
-    html += `<button style="background:#2563eb;color:#fff;border:none;padding:10px 24px;border-radius:999px;font-size:13px;font-weight:600;cursor:pointer;margin-top:4px;">Submit</button></div>`
+    // No Submit button — the email Send button in the toolbar handles submission
+    html += `</div>`
     return html
   }
 

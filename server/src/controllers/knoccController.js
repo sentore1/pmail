@@ -144,6 +144,30 @@ export const getReceivedRequests = async (req, res) => {
   }
 };
 
+export const getSentRequests = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const requests = await prisma.knoccRequest.findMany({
+      where: { senderId: userId },
+      select: {
+        id: true,
+        status: true,
+        recipientId: true,
+        recipient: {
+          select: { id: true, email: true, name: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    res.json({ requests });
+  } catch (error) {
+    console.error('Get sent requests error:', error);
+    res.status(500).json({ error: 'Failed to get sent requests' });
+  }
+};
+
 export const respondToRequest = async (req, res) => {
   try {
     const { id } = req.params;

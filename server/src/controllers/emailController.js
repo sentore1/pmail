@@ -105,6 +105,20 @@ export const sendEmail = async (req, res) => {
       });
     }
 
+    // Refresh lastEmailAt for contact records between sender and each TO/CC recipient
+    const recipientUserIds = recipientRows.map(r => r.recipientId)
+    if (recipientUserIds.length > 0) {
+      await prisma.contact.updateMany({
+        where: {
+          OR: [
+            { userId: senderId, contactId: { in: recipientUserIds } },
+            { userId: { in: recipientUserIds }, contactId: senderId },
+          ],
+        },
+        data: { lastEmailAt: new Date() },
+      })
+    }
+
     res.status(201).json({
       message: 'Email sent successfully',
       email,
@@ -355,6 +369,18 @@ export const getEmailById = async (req, res) => {
         data: { isRead: true, readAt: new Date() },
       });
 
+      // Refresh lastEmailAt — reading an email counts as activity between contacts
+      const senderId = recipientRow.email.senderId
+      await prisma.contact.updateMany({
+        where: {
+          OR: [
+            { userId, contactId: senderId },
+            { userId: senderId, contactId: userId },
+          ],
+        },
+        data: { lastEmailAt: new Date() },
+      })
+
       const email = {
         ...recipientRow.email,
         isRead: true,
@@ -561,13 +587,34 @@ export const permanentlyDeleteEmail = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // Only the sender can permanently delete
-    const email = await prisma.email.findFirst({ where: { id, senderId: userId } });
+    // Check if the user is the sender or a recipient
+    const email = await prisma.email.findFirst({
+      where: {
+        id,
+        OR: [
+          { senderId: userId },
+          { recipients: { some: { recipientId: userId } } },
+        ],
+      },
+    });
+
     if (!email) {
       return res.status(404).json({ error: 'Email not found or insufficient permission' });
     }
 
-    await prisma.email.delete({ where: { id } });
+    if (email.senderId === userId) {
+      // Sender permanently deletes the whole email record for everyone
+      await prisma.email.delete({ where: { id } });
+    } else {
+      // Recipient — remove their soft-delete flag, recipient row, and star so it
+      // disappears entirely from their account without affecting other users
+      await prisma.$transaction([
+        prisma.emailDelete.deleteMany({ where: { emailId: id, userId } }),
+        prisma.emailRecipient.deleteMany({ where: { emailId: id, recipientId: userId } }),
+        prisma.emailStar.deleteMany({ where: { emailId: id, userId } }),
+      ]);
+    }
+
     res.json({ message: 'Email permanently deleted' });
   } catch (error) {
     console.error('Permanently delete email error:', error);

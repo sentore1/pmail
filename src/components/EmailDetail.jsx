@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download } from 'lucide-react'
+import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp } from 'lucide-react'
 import DOMPurify from 'dompurify'
 import { knoccAPI, userAPI, emailAPI } from '../services/api'
 
@@ -12,6 +12,9 @@ const VerifiedBadge = ({ className = "w-4 h-4" }) => (
 
 function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }) {
   const isRequestView = viewType === 'knocc-requests'
+  const isBinView = viewType === 'bin'
+
+  // ── All hooks must be here — before any early returns ────────────────────
   const [peopleTab, setPeopleTab] = useState('who-you-know')
   const [allPeople, setAllPeople] = useState([])
   const [whoYouKnowPeople, setWhoYouKnowPeople] = useState([])
@@ -19,6 +22,23 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
   const [showKnoccModal, setShowKnoccModal] = useState(false)
   const [selectedPerson, setSelectedPerson] = useState(null)
   const [knoccReason, setKnoccReason] = useState('')
+  const [actionError, setActionError] = useState('')
+  // IDs of users we've already sent a Knocc request to (or are contacts with)
+  const [sentKnoccIds, setSentKnoccIds] = useState(new Set())
+  const [contactIds, setContactIds] = useState(new Set())
+
+  // Thread expand state — which message IDs are open
+  const [expandedIds, setExpandedIds] = useState(() => {
+    const t = email?._thread || (email ? [email] : [])
+    return new Set(t.length ? [t[t.length - 1].id] : [])
+  })
+
+  // Reset expanded state whenever the selected email/thread changes
+  useEffect(() => {
+    const t = email?._thread || (email ? [email] : [])
+    setExpandedIds(new Set(t.length ? [t[t.length - 1].id] : []))
+    setActionError('')  // clear any stale error when switching emails
+  }, [email?.id])
 
   // Fetch people when in Knocc requests view without email selected
   useEffect(() => {
@@ -29,24 +49,41 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
 
   const fetchPeople = async () => {
     try {
-      const [usersRes, contactsRes] = await Promise.all([
+      const [usersRes, contactsRes, sentRes] = await Promise.all([
         userAPI.searchUsers(''),
-        userAPI.getContacts()
+        userAPI.getContacts(),
+        knoccAPI.getSentRequests(),
       ])
       
       if (usersRes.users) {
         const approved = contactsRes.contacts || []
-        const approvedIds = new Set(approved.map(c => c.id))
-        
-        setWhoYouKnowPeople(approved.slice(0, 2))
-        setAllPeople(usersRes.users.filter(u => !approvedIds.has(u.id)))
+        // Split into active contacts and expired ones
+        const activeContacts = approved.filter(c => !c.isExpired)
+        const expiredContacts = approved.filter(c => c.isExpired)
+
+        const activeIds = new Set(activeContacts.map(c => c.id))
+        const expiredIds = new Set(expiredContacts.map(c => c.id))
+        const sent = sentRes.requests || []
+        const sentIds = new Set(sent.map(r => r.recipientId))
+
+        setContactIds(activeIds)
+        // Expired contacts go back into the "needs re-knocc" pool — remove from sentIds if expired
+        expiredIds.forEach(id => sentIds.delete(id))
+        setSentKnoccIds(sentIds)
+        setWhoYouKnowPeople(activeContacts.slice(0, 2))
+        // All people: non-active contacts + expired contacts (they can be re-knocced)
+        const allUserIds = new Set(usersRes.users.map(u => u.id))
+        // Merge expired contacts back into the all-people list with their expiry flag
+        const expiredInAll = expiredContacts.filter(c => !allUserIds.has(c.id))
+        setAllPeople([
+          ...expiredContacts.map(c => ({ ...c, _expired: true })),
+          ...usersRes.users.filter(u => !activeIds.has(u.id)),
+        ])
       }
     } catch (err) {
       console.error('Failed to fetch people:', err)
     }
   }
-
-  const [actionError, setActionError] = useState('')
 
   const handleKnoccClick = (person) => {
     setSelectedPerson(person)
@@ -67,6 +104,8 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
         message: '',
         paymentAmount: selectedPerson.knoccPrice,
       })
+      // Mark this person as already knocced so the button disappears immediately
+      setSentKnoccIds((prev) => new Set([...prev, selectedPerson.id]))
       setShowKnoccModal(false)
       setKnoccReason('')
     } catch (err) {
@@ -110,8 +149,13 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
     if (!email) return
     setLoading(true)
     try {
-      await emailAPI.deleteEmail(email.id)
-      onClose()
+      if (isBinView) {
+        await emailAPI.permanentlyDeleteEmail(email.id)
+      } else {
+        await emailAPI.deleteEmail(email.id)
+      }
+      onClose()          // clear selected email first
+      setActionError('') // ensure no stale error lingers
       if (onRefresh) onRefresh()
     } catch (err) {
       setActionError(err.message || 'Failed to delete email')
@@ -172,7 +216,11 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
               const colors = ['from-blue-400 to-blue-600', 'from-purple-400 to-purple-600', 'from-green-400 to-green-600', 'from-orange-400 to-orange-600']
               const color = colors[idx % colors.length]
               return (
-              <div key={person.id || idx} className="border border-gray-200 rounded-xl p-1.5 hover:border-blue-300 transition-all">
+              <div key={person.id || idx} className={`border rounded-xl p-1.5 transition-all ${
+                person._expired
+                  ? 'border-amber-200 hover:border-amber-400 bg-amber-50/30'
+                  : 'border-gray-200 hover:border-blue-300'
+              }`}>
                 <div className="flex items-start justify-between mb-1">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
                     <div className={`w-7 h-7 bg-gradient-to-br ${color} rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
@@ -193,12 +241,26 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
                       </div>
                       <span className="text-xs font-medium text-gray-700">${person.knoccPrice}</span>
                     </div>
-                    <button
-                      onClick={() => handleKnoccClick(person)}
-                      className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded transition-colors font-medium"
-                    >
-                      Knocc
-                    </button>
+                    {contactIds.has(person.id) ? (
+                      <span className="text-xs text-green-600 font-medium px-2 py-0.5">Chatting</span>
+                    ) : person._expired ? (
+                      <button
+                        onClick={() => handleKnoccClick(person)}
+                        title="Chat expired — Knocc again to reconnect"
+                        className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors font-medium"
+                      >
+                        Re-Knocc
+                      </button>
+                    ) : sentKnoccIds.has(person.id) ? (
+                      <span className="text-xs text-gray-400 font-medium px-2 py-0.5">Pending</span>
+                    ) : (
+                      <button
+                        onClick={() => handleKnoccClick(person)}
+                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded transition-colors font-medium"
+                      >
+                        Knocc
+                      </button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -343,34 +405,6 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
     }
   }
 
-  // Build reply/forward context objects
-  const buildReplyContext = () => {
-    // email.sender is an object { id, name, email } from the API
-    const senderEmail = email.sender?.email || ''
-    const senderName  = email.sender?.name  || senderEmail || 'Unknown'
-    return {
-      senderId:    email.sender?.id   || '',
-      senderEmail,
-      senderName,
-      subject:     email.subject      || '',
-      body:        email.body         || '',
-      date:        email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
-    }
-  }
-
-  const buildForwardContext = () => {
-    const senderEmail = email.sender?.email || ''
-    const senderName  = email.sender?.name  || senderEmail || 'Unknown'
-    return {
-      senderId:    email.sender?.id   || '',
-      senderEmail,
-      senderName,
-      subject:     email.subject      || '',
-      body:        email.body         || '',
-      date:        email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
-    }
-  }
-
   const formatBytes = (bytes) => {
     if (!bytes) return ''
     if (bytes < 1024) return `${bytes} B`
@@ -378,20 +412,88 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
+  // The thread is either from the _thread array (grouped) or just the single email
+  const thread = email._thread || [email]
+  const isThread = thread.length > 1
+
+  const toggleExpand = (id) => {
+    setExpandedIds((prev) => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  // Reply/forward uses the LATEST message in the thread
+  const latestMsg = thread[thread.length - 1]
+
+  const buildReplyContext = () => {
+    const senderObj = latestMsg.sender || {}
+    const firstRecipient = latestMsg.recipients?.find(r => r.type === 'TO')?.recipient || {}
+    const senderEmail = senderObj.email || firstRecipient.email || ''
+    const senderName  = senderObj.name  || firstRecipient.name  || senderEmail || 'Unknown'
+    return {
+      senderId:    senderObj.id || firstRecipient.id || '',
+      senderEmail,
+      senderName,
+      subject:  latestMsg.subject || '',
+      body:     latestMsg.body    || '',
+      date:     latestMsg.sentAt ? new Date(latestMsg.sentAt).toLocaleString() : '',
+    }
+  }
+
+  const buildForwardContext = () => {
+    const senderObj = latestMsg.sender || {}
+    const senderEmail = senderObj.email || ''
+    const senderName  = senderObj.name  || senderEmail || 'Unknown'
+    return {
+      senderId:    senderObj.id  || '',
+      senderEmail,
+      senderName,
+      subject:     latestMsg.subject || '',
+      body:        latestMsg.body    || '',
+      date:        latestMsg.sentAt ? new Date(latestMsg.sentAt).toLocaleString() : '',
+    }
+  }
+
+  // Sanitize helper reused per message
+  // Use RETURN_DOM_FRAGMENT=false, ADD_TAGS for form elements, and explicitly
+  // allow interactive elements so filled-in form values survive sanitization.
+  const sanitizeBody = (body) => DOMPurify.sanitize(body || '(No content)', {
+    ALLOWED_TAGS: ['p','br','strong','b','em','i','u','s','a','ul','ol','li',
+                   'h1','h2','h3','h4','blockquote','pre','code','table',
+                   'thead','tbody','tr','th','td','img','hr','div','span',
+                   'input','textarea','select','option','label'],
+    ALLOWED_ATTR: ['href','src','alt','style','class','target','rel',
+                   'colspan','rowspan','width','height','align','border',
+                   'cellpadding','cellspacing','type','value','placeholder',
+                   'rows','cols','name','checked','selected','disabled',
+                   'readonly','size','maxlength','for','id'],
+    ALLOW_DATA_ATTR: false,
+    FORCE_BODY: true,
+    // Keep form elements — DOMPurify strips them by default as "dangerous"
+    ADD_TAGS: ['input','textarea','select','option'],
+    ADD_ATTR: ['value','type','checked','selected','readonly','disabled','placeholder','rows','name'],
+  })
+
   return (
     <div className="flex-1 flex flex-col bg-white">
-      {/* Header */}
+      {/* Thread header */}
       <div className="p-5 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-3">
-          <h2 className="text-lg font-medium text-gray-900">{email.subject}</h2>
-          <div className="flex items-center gap-1">
+        <div className="flex items-center justify-between mb-1">
+          <h2 className="text-lg font-medium text-gray-900 flex-1 min-w-0 truncate pr-4">
+            {latestMsg.subject}
+          </h2>
+          <div className="flex items-center gap-1 flex-shrink-0">
             <button onClick={handleStarEmail} disabled={loading}
               className="p-1.5 hover:bg-yellow-50 rounded-md transition-colors disabled:opacity-50"
-              title={email.isStarred ? 'Unstar' : 'Star'}>
-              <Star className={`w-4 h-4 ${email.isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+              title={latestMsg.isStarred ? 'Unstar' : 'Star'}>
+              <Star className={`w-4 h-4 ${latestMsg.isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
             </button>
             <button onClick={handleDeleteEmail} disabled={loading}
-              className="p-1.5 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50" title="Delete">
+              className="p-1.5 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
+              title={isBinView ? 'Delete permanently' : 'Move to bin'}>
               <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
             </button>
             <button className="p-1.5 hover:bg-gray-50 rounded-md transition-colors">
@@ -399,81 +501,104 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
             </button>
           </div>
         </div>
-
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 font-medium text-sm">
-              {(email.sender?.name || email.sender || '?')[0].toUpperCase()}
-            </span>
-          </div>
-          <div className="flex-1">
-            <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 text-sm">
-                {email.sender?.name || email.sender}
-              </span>
-              {email.sender?.verified && (
-                <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
-                  ✓ Verified
-                </span>
-              )}
-            </div>
-            <p className="text-xs text-gray-500">{email.sender?.email || email.email}</p>
-          </div>
-          <span className="text-xs text-gray-400">
-            {email.sentAt ? new Date(email.sentAt).toLocaleString() : email.timestamp}
-          </span>
-        </div>
+        {isThread && (
+          <p className="text-xs text-gray-400">{thread.length} messages in this conversation</p>
+        )}
       </div>
 
-      {/* Email Body */}
-      <div className="flex-1 p-5 overflow-y-auto">
+      {/* Thread messages */}
+      <div className="flex-1 overflow-y-auto">
         {actionError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-start gap-2">
+          <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-start gap-2">
             <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
             <span>{actionError}</span>
           </div>
         )}
-        <div className="max-w-2xl">
-          {/* Render HTML body safely — sanitized against XSS */}
-          <div
-            className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{
-              __html: DOMPurify.sanitize(email.body || email.preview || '(No content)', {
-                ALLOWED_TAGS: ['p','br','strong','b','em','i','u','s','a','ul','ol','li',
-                               'h1','h2','h3','h4','blockquote','pre','code','table',
-                               'thead','tbody','tr','th','td','img','hr','div','span'],
-                ALLOWED_ATTR: ['href','src','alt','style','class','target','rel',
-                               'colspan','rowspan','width','height','align','border',
-                               'cellpadding','cellspacing'],
-                ALLOW_DATA_ATTR: false,
-              })
-            }}
-          />
 
-          {/* Attachments */}
-          {email.attachments?.length > 0 && (
-            <div className="mt-6 pt-4 border-t border-gray-100">
-              <p className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wide">
-                {email.attachments.length} Attachment{email.attachments.length > 1 ? 's' : ''}
-              </p>
-              <div className="flex flex-wrap gap-2">
-                {email.attachments.map((att) => (
-                  <a key={att.id}
-                    href={emailAPI.getAttachmentUrl(email.id, att.id)}
-                    target="_blank" rel="noreferrer"
-                    className="flex items-center gap-2 bg-gray-50 border border-gray-200 hover:border-blue-300 px-3 py-2 rounded-lg text-sm transition-colors">
-                    <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
-                    <div className="min-w-0">
-                      <p className="text-gray-700 truncate max-w-[160px]">{att.filename}</p>
-                      <p className="text-xs text-gray-400">{formatBytes(att.size)}</p>
-                    </div>
-                    <Download className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                  </a>
-                ))}
+        {thread.map((msg, idx) => {
+          const isExpanded = expandedIds.has(msg.id)
+          const isLast = idx === thread.length - 1
+          const msgSenderName = msg.sender?.name || (typeof msg.sender === 'string' ? msg.sender : 'Unknown')
+          const msgSenderEmail = msg.sender?.email || ''
+          const avatarColors = ['bg-blue-500','bg-purple-500','bg-green-500','bg-orange-500','bg-pink-500','bg-teal-500']
+          const avatarColor = avatarColors[Math.abs(
+            (msgSenderName || '').split('').reduce((h, c) => c.charCodeAt(0) + ((h << 5) - h), 0)
+          ) % avatarColors.length]
+          const initials = msgSenderName !== 'Unknown'
+            ? msgSenderName.trim().split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
+            : '?'
+
+          return (
+            <div key={msg.id} className={`border-b border-gray-100 ${isLast ? '' : ''}`}>
+              {/* Message header — always visible, click to expand/collapse */}
+              <div
+                className="flex items-center gap-2.5 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => toggleExpand(msg.id)}
+              >
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor}`}>
+                  <span className="text-white text-xs font-semibold">{initials}</span>
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium text-gray-900 text-sm">{msgSenderName}</span>
+                    {msg.sender?.verified && (
+                      <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">✓ Verified</span>
+                    )}
+                  </div>
+                  {!isExpanded && (
+                    <p className="text-xs text-gray-400 truncate">
+                      {msg.body ? msg.body.replace(/<[^>]+>/g, '').slice(0, 60) : ''}
+                    </p>
+                  )}
+                  {isExpanded && (
+                    <p className="text-xs text-gray-500">{msgSenderEmail}</p>
+                  )}
+                </div>
+                <div className="flex items-center gap-1.5 flex-shrink-0">
+                  <span className="text-xs text-gray-400">
+                    {msg.sentAt ? new Date(msg.sentAt).toLocaleString() : msg.timestamp}
+                  </span>
+                  {isExpanded
+                    ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
+                    : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
+                </div>
               </div>
+
+              {/* Message body — shown when expanded */}
+              {isExpanded && (
+                <div className="px-5 pb-5">
+                  <div
+                    className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
+                    dangerouslySetInnerHTML={{ __html: sanitizeBody(msg.body || msg.preview) }}
+                  />
+                  {/* Attachments */}
+                  {msg.attachments?.length > 0 && (
+                    <div className="mt-4 pt-4 border-t border-gray-100">
+                      <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
+                        {msg.attachments.length} Attachment{msg.attachments.length > 1 ? 's' : ''}
+                      </p>
+                      <div className="flex flex-wrap gap-2">
+                        {msg.attachments.map((att) => (
+                          <a key={att.id}
+                            href={emailAPI.getAttachmentUrl(msg.id, att.id)}
+                            target="_blank" rel="noreferrer"
+                            className="flex items-center gap-2 bg-gray-50 border border-gray-200 hover:border-blue-300 px-3 py-2 rounded-lg text-sm transition-colors">
+                            <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                            <div className="min-w-0">
+                              <p className="text-gray-700 truncate max-w-[160px]">{att.filename}</p>
+                              <p className="text-xs text-gray-400">{formatBytes(att.size)}</p>
+                            </div>
+                            <Download className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                          </a>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          )
+        })}
       </div>
 
       {/* Reply / Forward actions */}

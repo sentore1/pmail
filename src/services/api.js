@@ -189,6 +189,13 @@ export const knoccAPI = {
     return handleResponse(response);
   },
 
+  getSentRequests: async () => {
+    const response = await fetch(`${API_URL}/knocc/sent`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   respondToRequest: async (id, action) => {
     const response = await fetch(`${API_URL}/knocc/requests/${id}/respond`, {
       method: 'POST',

@@ -55,6 +55,12 @@ export const getContacts = async (req, res) => {
   try {
     const userId = req.user.id;
 
+    // Also fetch the current user's chatExpiryMonths setting
+    const currentUser = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { chatExpiryMonths: true },
+    });
+
     const contacts = await prisma.contact.findMany({
       where: { userId },
       include: {
@@ -65,6 +71,7 @@ export const getContacts = async (req, res) => {
             email: true,
             country: true,
             verified: true,
+            knoccPrice: true,
           },
         },
       },
@@ -73,7 +80,31 @@ export const getContacts = async (req, res) => {
       },
     });
 
-    res.json({ contacts: contacts.map((c) => c.contact) });
+    const chatExpiryMonths = currentUser?.chatExpiryMonths ?? null;
+
+    const now = new Date();
+    const result = contacts.map((c) => {
+      const lastActivity = c.lastEmailAt || c.approvedAt;
+      let isExpired = false;
+      let expiresAt = null;
+
+      if (chatExpiryMonths !== null) {
+        const expiry = new Date(lastActivity);
+        expiry.setMonth(expiry.getMonth() + chatExpiryMonths);
+        expiresAt = expiry.toISOString();
+        isExpired = now > expiry;
+      }
+
+      return {
+        ...c.contact,
+        approvedAt: c.approvedAt,
+        lastEmailAt: c.lastEmailAt,
+        isExpired,
+        expiresAt,
+      };
+    });
+
+    res.json({ contacts: result, chatExpiryMonths });
   } catch (error) {
     console.error('Get contacts error:', error);
     res.status(500).json({ error: 'Failed to get contacts' });
@@ -83,7 +114,7 @@ export const getContacts = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, phoneNumber, age, gender, country, knoccPrice, autoApprove, requireReason } = req.body;
+    const { name, phoneNumber, age, gender, country, knoccPrice, autoApprove, requireReason, chatExpiryMonths } = req.body;
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -96,11 +127,16 @@ export const updateProfile = async (req, res) => {
         ...(knoccPrice !== undefined && { knoccPrice: parseFloat(knoccPrice) }),
         ...(autoApprove !== undefined && { autoApprove: Boolean(autoApprove) }),
         ...(requireReason !== undefined && { requireReason: Boolean(requireReason) }),
+        // null means "never expires"; a number means months of inactivity before expiry
+        ...(chatExpiryMonths !== undefined && {
+          chatExpiryMonths: chatExpiryMonths === null || chatExpiryMonths === '' ? null : parseInt(chatExpiryMonths),
+        }),
       },
       select: {
         id: true, name: true, email: true, phoneNumber: true,
         age: true, gender: true, country: true, knoccPrice: true,
-        verified: true, walletBalance: true, autoApprove: true, requireReason: true,
+        verified: true, walletBalance: true, autoApprove: true,
+        requireReason: true, chatExpiryMonths: true,
       },
     });
 

@@ -31,6 +31,7 @@ export const authenticate = async (req, res, next) => {
         walletBalance: true,
         autoApprove: true,
         requireReason: true,
+        chatExpiryMonths: true,
       },
     });
 

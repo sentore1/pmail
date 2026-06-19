@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Mail, Edit, Inbox, Send, Star, Trash2, MoreHorizontal, Bell, Settings, Users, Shield, Wallet, FileText } from 'lucide-react'
+import { Mail, Edit, Inbox, Send, Star, Trash2, MoreHorizontal, Bell, Settings, Users, Shield, Wallet, FileText, LogOut } from 'lucide-react'
 
 function Sidebar({
   onCompose,
@@ -12,8 +12,11 @@ function Sidebar({
   unreadCount = 0,
   knoccRequestCount = 0,
   draftCount = 0,
+  user,
+  onLogout,
 }) {
   const [showMore, setShowMore] = useState(false)
+  const [showProfileMenu, setShowProfileMenu] = useState(false)
 
   const navBtn = (view, icon, label, badge, onClick) => {
     const Icon = icon
@@ -59,13 +62,9 @@ function Sidebar({
 
       {/* Navigation */}
       <nav className="flex-1 px-3 overflow-y-auto space-y-1">
-        {/* Inbox */}
         {navBtn('inbox', Inbox, 'Inbox', unreadCount, onShowInbox)}
-
-        {/* Knocc Requests */}
         {navBtn('knocc-requests', Bell, 'Knocc Requests', knoccRequestCount, onShowKnoccRequests)}
 
-        {/* More Section */}
         <button
           onClick={() => setShowMore(!showMore)}
           className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors text-sm"
@@ -89,14 +88,12 @@ function Sidebar({
               <Wallet className="w-4 h-4" />
               <span>Wallet</span>
             </button>
-
             {navBtn('sent', Send, 'Sent')}
             {navBtn('drafts', FileText, 'Drafts', draftCount)}
             {navBtn('starred', Star, 'Starred')}
             {navBtn('bin', Trash2, 'Bin')}
             {navBtn('contacts', Users, 'Approved Contacts')}
             {navBtn('blocked', Shield, 'Blocked Users')}
-
             <button
               onClick={onShowSettings}
               className="w-full flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors text-sm"
@@ -107,6 +104,47 @@ function Sidebar({
           </div>
         )}
       </nav>
+
+      {/* Profile — bottom of sidebar */}
+      <div className="px-3 pb-3 pt-2 border-t border-gray-100 relative">
+        {/* Popup menu — opens upward */}
+        {showProfileMenu && (
+          <div className="absolute bottom-full left-3 right-3 mb-1.5 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+            <div className="px-3 py-2 border-b border-gray-100">
+              <p className="text-xs font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
+              <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
+            </div>
+            <button
+              onClick={() => { setShowProfileMenu(false); onShowSettings() }}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              <Settings className="w-3.5 h-3.5" />
+              Settings
+            </button>
+            <div className="border-t border-gray-100 my-0.5" />
+            <button
+              onClick={() => { setShowProfileMenu(false); onLogout() }}
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="w-3.5 h-3.5" />
+              Logout
+            </button>
+          </div>
+        )}
+
+        <button
+          onClick={() => setShowProfileMenu((v) => !v)}
+          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors"
+        >
+          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+            {user?.name?.charAt(0).toUpperCase() || 'U'}
+          </div>
+          <div className="flex-1 min-w-0 text-left">
+            <p className="text-xs font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
+            <p className="text-[10px] text-gray-500 truncate">{user?.email || ''}</p>
+          </div>
+        </button>
+      </div>
     </div>
   )
 }

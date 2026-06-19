@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Save, Shield, UserPlus, Globe, Phone, Calendar, Users as UsersIcon, User, DollarSign, Brain, CheckCircle, Loader, RefreshCw, AlertCircle } from 'lucide-react'
+import { X, Save, Shield, UserPlus, Globe, Phone, Calendar, Users as UsersIcon, User, DollarSign, Brain, CheckCircle, Loader, RefreshCw, AlertCircle, Clock } from 'lucide-react'
 import { userAPI, googleAPI } from '../services/api'
 
 function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
@@ -13,6 +13,8 @@ function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
     gender: user?.gender || '',
     country: user?.country || '',
     knoccPrice: user?.knoccPrice || 1,
+    // null = never expires, number = months of inactivity before chat closes
+    chatExpiryMonths: user?.chatExpiryMonths ?? null,
     customFields: []
   })
   const [loading, setLoading] = useState(false)
@@ -66,6 +68,7 @@ function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
         knoccPrice: parseFloat(settings.knoccPrice),
         autoApprove: settings.autoApprove,
         requireReason: settings.requireReason,
+        chatExpiryMonths: settings.chatExpiryMonths,
       })
       if (response.user) {
         onUpdate(response.user)
@@ -195,6 +198,67 @@ function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
                     <p className="text-xs text-gray-500">Automatically accept all Knocc requests</p>
                   </div>
                 </label>
+              </div>
+            </div>
+
+            {/* Chat Expiry */}
+            <div>
+              <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
+                <Clock className="w-5 h-5 text-blue-600" />
+                Chat Expiry
+              </h3>
+
+              <div className="ml-7 space-y-4">
+                <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
+                  <p className="text-sm text-amber-800 font-medium mb-1">Auto-close inactive chats</p>
+                  <p className="text-xs text-amber-700">
+                    If there's no email activity for the set period, the contact is removed and they'll need
+                    to send a new Knocc request (and pay again) to reach you.
+                  </p>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                    Close chat after inactivity of:
+                  </label>
+                  <div className="flex flex-wrap gap-2">
+                    {[
+                      { label: 'Never', value: null },
+                      { label: '1 month', value: 1 },
+                      { label: '2 months', value: 2 },
+                      { label: '3 months', value: 3 },
+                      { label: '4 months', value: 4 },
+                      { label: '6 months', value: 6 },
+                      { label: '12 months', value: 12 },
+                    ].map(({ label, value }) => {
+                      const isSelected = settings.chatExpiryMonths === value
+                      return (
+                        <button
+                          key={label}
+                          type="button"
+                          onClick={() => setSettings({ ...settings, chatExpiryMonths: value })}
+                          className={`px-3 py-1.5 rounded-lg text-sm font-medium border transition-colors ${
+                            isSelected
+                              ? 'bg-blue-600 text-white border-blue-600'
+                              : 'bg-white text-gray-600 border-gray-300 hover:border-blue-400 hover:text-blue-600'
+                          }`}
+                        >
+                          {label}
+                        </button>
+                      )
+                    })}
+                  </div>
+                  {settings.chatExpiryMonths !== null && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Contacts who haven't exchanged an email with you in {settings.chatExpiryMonths} month{settings.chatExpiryMonths > 1 ? 's' : ''} will be removed and need to Knocc again.
+                    </p>
+                  )}
+                  {settings.chatExpiryMonths === null && (
+                    <p className="text-xs text-gray-500 mt-2">
+                      Contacts never expire — once approved, they can always reach you.
+                    </p>
+                  )}
+                </div>
               </div>
             </div>
 

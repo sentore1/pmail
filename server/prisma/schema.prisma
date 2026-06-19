@@ -33,6 +33,8 @@ model User {
   // User's settings
   autoApprove       Boolean   @default(false)
   requireReason     Boolean   @default(true)
+  // Chat expiry: null = never expires, otherwise months of inactivity before re-Knocc required
+  chatExpiryMonths  Int?
 
   // Gmail AI learning
   gmailAccessEnabled Boolean  @default(false)
@@ -176,6 +178,8 @@ model Contact {
   contact     User      @relation("ContactTo", fields: [contactId], references: [id], onDelete: Cascade)
   
   approvedAt  DateTime  @default(now())
+  // Updated whenever either side sends an email to the other
+  lastEmailAt DateTime?
 
   @@unique([userId, contactId])
   @@index([userId])
