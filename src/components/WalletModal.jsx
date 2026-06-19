@@ -1,0 +1,554 @@
+import React, { useState, useEffect } from 'react'
+import { X, Wallet, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft, QrCode } from 'lucide-react'
+import { walletAPI } from '../services/api'
+
+function WalletModal({ onClose, user }) {
+  const [balance, setBalance] = useState(0)
+  const [transactions, setTransactions] = useState([])
+  const [activeTab, setActiveTab] = useState('overview') // 'overview', 'deposit', 'withdraw'
+  const [paymentMethod, setPaymentMethod] = useState('card') // 'card', 'lightning'
+  const [amount, setAmount] = useState('')
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
+  
+  // Lightning specific states
+  const [lightningInvoice, setLightningInvoice] = useState(null)
+  const [invoiceCopied, setInvoiceCopied] = useState(false)
+  const [checkingInvoice, setCheckingInvoice] = useState(false)
+  
+  // Withdrawal states
+  const [withdrawMethod, setWithdrawMethod] = useState('bank') // 'bank', 'lightning'
+  const [lightningAddress, setLightningAddress] = useState('')
+
+  useEffect(() => {
+    loadWalletData()
+  }, [])
+
+  useEffect(() => {
+    let interval
+    if (lightningInvoice && checkingInvoice) {
+      interval = setInterval(async () => {
+        try {
+          const response = await walletAPI.checkInvoiceStatus(lightningInvoice.paymentHash)
+          if (response.settled) {
+            setSuccess('Payment received! Your wallet has been credited.')
+            setBalance(response.walletBalance)
+            setLightningInvoice(null)
+            setCheckingInvoice(false)
+            await loadWalletData()
+            setTimeout(() => {
+              setActiveTab('overview')
+              setSuccess('')
+            }, 2000)
+          }
+        } catch (err) {
+          console.error('Failed to check invoice status:', err)
+        }
+      }, 3000)
+    }
+    return () => clearInterval(interval)
+  }, [lightningInvoice, checkingInvoice])
+
+  const loadWalletData = async () => {
+    try {
+      const [balanceRes, transactionsRes] = await Promise.all([
+        walletAPI.getBalance(),
+        walletAPI.getTransactions()
+      ])
+      
+      if (balanceRes.walletBalance !== undefined) {
+        setBalance(balanceRes.walletBalance)
+      }
+      
+      if (transactionsRes.transactions) {
+        setTransactions(transactionsRes.transactions)
+      }
+    } catch (err) {
+      console.error('Failed to load wallet data:', err)
+      setError('Failed to load wallet data')
+    }
+  }
+
+  const handleAddFundsCard = async () => {
+    if (!amount || parseFloat(amount) < 1) {
+      setError('Amount must be at least $1')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    
+    try {
+      const response = await walletAPI.addFunds(parseFloat(amount))
+      
+      if (response.walletBalance !== undefined) {
+        setBalance(response.walletBalance)
+      }
+      
+      setSuccess('Funds added successfully!')
+      setAmount('')
+      await loadWalletData()
+      setTimeout(() => {
+        setActiveTab('overview')
+        setSuccess('')
+      }, 2000)
+    } catch (err) {
+      setError(err.message || 'Failed to add funds')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCreateLightningInvoice = async () => {
+    if (!amount || parseFloat(amount) < 1) {
+      setError('Amount must be at least $1')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    
+    try {
+      const response = await walletAPI.createLightningInvoice(parseFloat(amount))
+      
+      if (response.invoice) {
+        setLightningInvoice(response.invoice)
+        setCheckingInvoice(true)
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to create Lightning invoice')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleCopyInvoice = () => {
+    if (lightningInvoice) {
+      navigator.clipboard.writeText(lightningInvoice.paymentRequest)
+      setInvoiceCopied(true)
+      setTimeout(() => setInvoiceCopied(false), 2000)
+    }
+  }
+
+  const handleWithdraw = async () => {
+    if (!amount || parseFloat(amount) < 1) {
+      setError('Amount must be at least $1')
+      return
+    }
+
+    if (parseFloat(amount) > balance) {
+      setError('Insufficient balance')
+      return
+    }
+
+    if (withdrawMethod === 'lightning' && !lightningAddress) {
+      setError('Please enter a Lightning address or invoice')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    
+    try {
+      const response = await walletAPI.withdrawFunds(
+        parseFloat(amount),
+        withdrawMethod === 'lightning' ? lightningAddress : null
+      )
+      
+      if (response.walletBalance !== undefined) {
+        setBalance(response.walletBalance)
+      }
+      
+      setSuccess('Withdrawal successful!')
+      setAmount('')
+      setLightningAddress('')
+      await loadWalletData()
+      setTimeout(() => {
+        setActiveTab('overview')
+        setSuccess('')
+      }, 2000)
+    } catch (err) {
+      setError(err.message || 'Failed to withdraw funds')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const formatTransactionType = (type) => {
+    switch (type) {
+      case 'DEPOSIT': return 'Funds Added'
+      case 'KNOCC_SENT': return 'Knocc Request Sent'
+      case 'KNOCC_RECEIVED': return 'Knocc Request Received'
+      case 'REFUND': return 'Refund'
+      case 'WITHDRAWAL': return 'Withdrawal'
+      default: return type
+    }
+  }
+
+  const formatDate = (dateString) => {
+    const date = new Date(dateString)
+    const now = new Date()
+    const diff = now - date
+    const hours = Math.floor(diff / (1000 * 60 * 60))
+    
+    if (hours < 24) {
+      return `Today, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    } else if (hours < 48) {
+      return `Yesterday, ${date.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`
+    } else {
+      return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' })
+    }
+  }
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] flex flex-col shadow-xl">
+        {/* Header */}
+        <div className="flex items-center justify-between p-5 border-b border-gray-100">
+          <div className="flex items-center gap-3">
+            {activeTab !== 'overview' && (
+              <button
+                onClick={() => {
+                  setActiveTab('overview')
+                  setError('')
+                  setSuccess('')
+                  setLightningInvoice(null)
+                  setCheckingInvoice(false)
+                }}
+                className="p-1.5 hover:bg-gray-50 rounded-md transition-colors"
+              >
+                <ArrowLeft className="w-5 h-5 text-gray-600" />
+              </button>
+            )}
+            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
+              <Wallet className="w-5 h-5 text-blue-600" />
+            </div>
+            <div>
+              <h2 className="text-lg font-medium text-gray-900">
+                {activeTab === 'overview' && 'My Wallet'}
+                {activeTab === 'deposit' && 'Add Funds'}
+                {activeTab === 'withdraw' && 'Withdraw Funds'}
+              </h2>
+              <p className="text-xs text-gray-500">
+                {activeTab === 'overview' && 'Manage your Pmail funds'}
+                {activeTab === 'deposit' && 'Choose your payment method'}
+                {activeTab === 'withdraw' && 'Transfer funds out'}
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="p-1.5 hover:bg-gray-50 rounded-md transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-600" />
+          </button>
+        </div>
+
+        {/* Content */}
+        <div className="flex-1 overflow-y-auto">
+          {/* Overview Tab */}
+          {activeTab === 'overview' && (
+            <div className="p-5">
+              <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-lg p-5 text-white mb-4">
+                <p className="text-sm opacity-90 mb-1">Available Balance</p>
+                <div className="flex items-baseline gap-1 mb-4">
+                  <span className="text-3xl font-semibold">${balance.toFixed(2)}</span>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setActiveTab('deposit')}
+                    className="flex items-center gap-2 bg-white text-blue-600 px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Funds
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('withdraw')}
+                    className="flex items-center gap-2 bg-white bg-opacity-20 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-30 transition-colors"
+                  >
+                    <ArrowUpRight className="w-4 h-4" />
+                    Withdraw
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3 mb-5">
+                <div className="bg-purple-50 p-3 rounded-md">
+                  <p className="text-xs text-purple-600 font-medium mb-1">Pryro Request</p>
+                  <p className="text-lg font-semibold text-purple-700">$50+</p>
+                  <p className="text-xs text-purple-600 mt-1">Priority access</p>
+                </div>
+                <div className="bg-green-50 p-3 rounded-md">
+                  <p className="text-xs text-green-600 font-medium mb-1">Standard Request</p>
+                  <p className="text-lg font-semibold text-green-700">$1</p>
+                  <p className="text-xs text-green-600 mt-1">Basic access</p>
+                </div>
+              </div>
+
+              <div>
+                <h3 className="text-sm font-medium text-gray-900 mb-3">Recent Transactions</h3>
+                {transactions.length === 0 ? (
+                  <div className="text-center py-8 text-gray-500">
+                    <p className="text-sm">No transactions yet</p>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {transactions.map((txn) => (
+                      <div key={txn.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-md">
+                        <div className="flex items-center gap-3">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center ${
+                            txn.amount > 0 ? 'bg-blue-100' : 'bg-gray-200'
+                          }`}>
+                            {txn.amount > 0 ? (
+                              <ArrowDownRight className="w-4 h-4 text-blue-600" />
+                            ) : (
+                              <ArrowUpRight className="w-4 h-4 text-gray-600" />
+                            )}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium text-gray-900">{formatTransactionType(txn.type)}</p>
+                            <p className="text-xs text-gray-500">{txn.description}</p>
+                            <p className="text-xs text-gray-400">{formatDate(txn.createdAt)}</p>
+                          </div>
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-sm font-semibold ${txn.amount > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+                            {txn.amount > 0 ? '+' : ''}${Math.abs(txn.amount).toFixed(2)}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Deposit Tab */}
+          {activeTab === 'deposit' && (
+            <div className="p-5">
+              {success && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  {success}
+                </div>
+              )}
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              {!lightningInvoice ? (
+                <>
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-3">Choose Payment Method</label>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setPaymentMethod('card')}
+                        className={`p-4 border-2 rounded-lg transition-all ${
+                          paymentMethod === 'card' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <CreditCard className={`w-6 h-6 mx-auto mb-2 ${paymentMethod === 'card' ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <p className="text-sm font-medium text-gray-900">Card</p>
+                        <p className="text-xs text-gray-500 mt-1">Instant</p>
+                      </button>
+                      <button
+                        onClick={() => setPaymentMethod('lightning')}
+                        className={`p-4 border-2 rounded-lg transition-all ${
+                          paymentMethod === 'lightning' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <Zap className={`w-6 h-6 mx-auto mb-2 ${paymentMethod === 'lightning' ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <p className="text-sm font-medium text-gray-900">Lightning</p>
+                        <p className="text-xs text-gray-500 mt-1">Low fees</p>
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="mb-4">
+                    <label className="block text-sm font-medium text-gray-700 mb-2">Amount (USD)</label>
+                    <div className="relative">
+                      <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                      <input
+                        type="number"
+                        value={amount}
+                        onChange={(e) => setAmount(e.target.value)}
+                        placeholder="0.00"
+                        min="1"
+                        step="0.01"
+                        className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-4 gap-2 mb-4">
+                    {[10, 25, 50, 100].map((preset) => (
+                      <button
+                        key={preset}
+                        onClick={() => setAmount(preset.toString())}
+                        className="py-2 px-3 border border-gray-300 rounded-md text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                      >
+                        ${preset}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={paymentMethod === 'card' ? handleAddFundsCard : handleCreateLightningInvoice}
+                    disabled={!amount || parseFloat(amount) < 1 || loading}
+                    className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-4 rounded-md transition-colors font-medium flex items-center justify-center gap-2"
+                  >
+                    {loading ? (
+                      <>
+                        <Clock className="w-4 h-4 animate-spin" />
+                        Processing...
+                      </>
+                    ) : paymentMethod === 'card' ? (
+                      <>
+                        <CreditCard className="w-4 h-4" />
+                        Add ${amount || '0.00'} with Card
+                      </>
+                    ) : (
+                      <>
+                        <Zap className="w-4 h-4" />
+                        Generate Lightning Invoice
+                      </>
+                    )}
+                  </button>
+                </>
+              ) : (
+                <div className="text-center">
+                  <div className="w-16 h-16 bg-yellow-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <Zap className="w-8 h-8 text-yellow-600" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Lightning Invoice Generated</h3>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Pay ${lightningInvoice.amountUsd.toFixed(2)} ({lightningInvoice.amountSats} sats)
+                  </p>
+                  <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 mb-4">
+                    <p className="text-xs font-mono text-gray-700 break-all">{lightningInvoice.paymentRequest}</p>
+                  </div>
+                  <button
+                    onClick={handleCopyInvoice}
+                    className="text-sm text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1 mx-auto mb-4"
+                  >
+                    {invoiceCopied ? <><CheckCircle className="w-4 h-4" />Copied!</> : <><Copy className="w-4 h-4" />Copy Invoice</>}
+                  </button>
+                  {checkingInvoice && (
+                    <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                      <Clock className="w-4 h-4 animate-spin" />
+                      Waiting for payment...
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Withdraw Tab */}
+          {activeTab === 'withdraw' && (
+            <div className="p-5">
+              {success && (
+                <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-sm text-green-600 flex items-center gap-2">
+                  <CheckCircle className="w-4 h-4" />
+                  {success}
+                </div>
+              )}
+              {error && (
+                <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+                <p className="text-sm text-blue-600 mb-1">Available Balance</p>
+                <p className="text-2xl font-semibold text-blue-900">${balance.toFixed(2)}</p>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-3">Withdrawal Method</label>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setWithdrawMethod('bank')}
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      withdrawMethod === 'bank' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <CreditCard className={`w-6 h-6 mx-auto mb-2 ${withdrawMethod === 'bank' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <p className="text-sm font-medium text-gray-900">Bank</p>
+                    <p className="text-xs text-gray-500 mt-1">1-3 days</p>
+                  </button>
+                  <button
+                    onClick={() => setWithdrawMethod('lightning')}
+                    className={`p-4 border-2 rounded-lg transition-all ${
+                      withdrawMethod === 'lightning' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                    }`}
+                  >
+                    <Zap className={`w-6 h-6 mx-auto mb-2 ${withdrawMethod === 'lightning' ? 'text-blue-600' : 'text-gray-400'}`} />
+                    <p className="text-sm font-medium text-gray-900">Lightning</p>
+                    <p className="text-xs text-gray-500 mt-1">Instant</p>
+                  </button>
+                </div>
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-gray-700 mb-2">Amount (USD)</label>
+                <div className="relative">
+                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="number"
+                    value={amount}
+                    onChange={(e) => setAmount(e.target.value)}
+                    placeholder="0.00"
+                    min="1"
+                    max={balance}
+                    step="0.01"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-lg"
+                  />
+                </div>
+              </div>
+
+              {withdrawMethod === 'lightning' && (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Lightning Address or Invoice
+                  </label>
+                  <input
+                    type="text"
+                    value={lightningAddress}
+                    onChange={(e) => setLightningAddress(e.target.value)}
+                    placeholder="lnbc..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"
+                  />
+                </div>
+              )}
+
+              <button
+                onClick={handleWithdraw}
+                disabled={!amount || parseFloat(amount) < 1 || parseFloat(amount) > balance || loading}
+                className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-4 rounded-md transition-colors font-medium flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <>
+                    <Clock className="w-4 h-4 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  <>
+                    <ArrowUpRight className="w-4 h-4" />
+                    Withdraw ${amount || '0.00'}
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+export default WalletModal

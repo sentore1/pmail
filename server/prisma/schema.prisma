@@ -1,0 +1,168 @@
+// This is your Prisma schema file
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String    @id @default(uuid())
+  name              String
+  email             String    @unique
+  password          String
+  phoneNumber       String?
+  age               Int?
+  gender            String?
+  country           String?
+  knoccPrice        Float     @default(1.0)
+  verified          Boolean   @default(false)
+  walletBalance     Float     @default(0.0)
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  // User's settings
+  autoApprove       Boolean   @default(false)
+  requireReason     Boolean   @default(true)
+
+  // Relationships
+  sentEmails        Email[]   @relation("SentEmails")
+  receivedEmails    EmailRecipient[]
+  sentRequests      KnoccRequest[] @relation("SentRequests")
+  receivedRequests  KnoccRequest[] @relation("ReceivedRequests")
+  
+  approvedContactsFrom  Contact[] @relation("ContactFrom")
+  approvedContactsTo    Contact[] @relation("ContactTo")
+  
+  blockedUsers      BlockedUser[] @relation("Blocker")
+  blockedByUsers    BlockedUser[] @relation("Blocked")
+  
+  transactions      Transaction[]
+  sentInvitations   Invitation[] @relation("SentInvitations")
+
+  @@index([email])
+}
+
+model Email {
+  id          String    @id @default(uuid())
+  subject     String
+  body        String
+  senderId    String
+  sender      User      @relation("SentEmails", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  recipients  EmailRecipient[]
+  
+  sentAt      DateTime  @default(now())
+  isStarred   Boolean   @default(false)
+  isArchived  Boolean   @default(false)
+  isBin       Boolean   @default(false)
+
+  @@index([senderId])
+  @@index([sentAt])
+}
+
+model EmailRecipient {
+  id          String    @id @default(uuid())
+  emailId     String
+  email       Email     @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  
+  recipientId String
+  recipient   User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+  
+  type        String // TO, CC, BCC
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+
+  @@index([emailId])
+  @@index([recipientId])
+}
+
+model KnoccRequest {
+  id            String    @id @default(uuid())
+  senderId      String
+  sender        User      @relation("SentRequests", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  recipientId   String
+  recipient     User      @relation("ReceivedRequests", fields: [recipientId], references: [id], onDelete: Cascade)
+  
+  reason        String
+  message       String?
+  paymentAmount Float
+  paymentType   String // PAID, PRYRO
+  
+  status        String @default("PENDING") // PENDING, APPROVED, DECLINED
+  
+  createdAt     DateTime  @default(now())
+  respondedAt   DateTime?
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([status])
+}
+
+model Contact {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation("ContactFrom", fields: [userId], references: [id], onDelete: Cascade)
+  
+  contactId   String
+  contact     User      @relation("ContactTo", fields: [contactId], references: [id], onDelete: Cascade)
+  
+  approvedAt  DateTime  @default(now())
+
+  @@unique([userId, contactId])
+  @@index([userId])
+  @@index([contactId])
+}
+
+model BlockedUser {
+  id          String    @id @default(uuid())
+  blockerId   String
+  blocker     User      @relation("Blocker", fields: [blockerId], references: [id], onDelete: Cascade)
+  
+  blockedId   String
+  blocked     User      @relation("Blocked", fields: [blockedId], references: [id], onDelete: Cascade)
+  
+  blockedAt   DateTime  @default(now())
+
+  @@unique([blockerId, blockedId])
+  @@index([blockerId])
+  @@index([blockedId])
+}
+
+model Transaction {
+  id          String    @id @default(uuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  type        String // DEPOSIT, KNOCC_SENT, KNOCC_RECEIVED, REFUND
+  amount      Float
+  description String
+  
+  createdAt   DateTime  @default(now())
+
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model Invitation {
+  id          String    @id @default(uuid())
+  senderId    String
+  sender      User      @relation("SentInvitations", fields: [senderId], references: [id], onDelete: Cascade)
+  
+  email       String
+  name        String?
+  status      String @default("PENDING") // PENDING, ACCEPTED, EXPIRED
+  inviteCode  String    @unique
+  
+  sentAt      DateTime  @default(now())
+  acceptedAt  DateTime?
+  
+  @@index([senderId])
+  @@index([email])
+  @@index([inviteCode])
+  @@index([status])
+}
