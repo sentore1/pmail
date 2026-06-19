@@ -1,77 +1,103 @@
 import prisma from '../utils/prisma.js';
 
+// Helper: base select for email with sender, recipients, attachments, per-user flags
+const emailSelect = (userId) => ({
+  id: true,
+  subject: true,
+  body: true,
+  isDraft: true,
+  sentAt: true,
+  sender: {
+    select: { id: true, name: true, email: true, verified: true },
+  },
+  recipients: {
+    include: {
+      recipient: {
+        select: { id: true, name: true, email: true, verified: true },
+      },
+    },
+  },
+  attachments: {
+    select: { id: true, filename: true, mimeType: true, size: true },
+  },
+  stars: {
+    where: { userId },
+    select: { id: true },
+  },
+  deletes: {
+    where: { userId },
+    select: { id: true },
+  },
+});
+
+// Shape raw email record into a clean response object
+const shapeEmail = (email, userId) => ({
+  ...email,
+  isStarred: email.stars?.length > 0,
+  isDeleted: email.deletes?.length > 0,
+  stars: undefined,
+  deletes: undefined,
+});
+
+// ─── Send email ─────────────────────────────────────────────────────────────
+
 export const sendEmail = async (req, res) => {
   try {
-    const { to, cc, bcc, subject, body } = req.body;
+    const { to, cc, bcc, subject, body, attachments: rawAttachments = [] } = req.body;
     const senderId = req.user.id;
 
-    // Create email
+    if (!to || to.length === 0) {
+      return res.status(400).json({ error: 'At least one recipient is required' });
+    }
+    if (!subject || !subject.trim()) {
+      return res.status(400).json({ error: 'Subject is required' });
+    }
+
+    // Create the email
     const email = await prisma.email.create({
       data: {
         subject,
-        body,
+        body: body || '',
         senderId,
+        isDraft: false,
+        attachments: {
+          create: rawAttachments.map((a) => ({
+            filename: a.filename,
+            mimeType: a.mimeType,
+            size: a.size,
+            data: a.data,
+          })),
+        },
       },
     });
 
-    // Create recipients
-    const recipients = [];
-    
-    // TO recipients
-    if (to && to.length > 0) {
-      for (const recipientEmail of to) {
-        const recipient = await prisma.user.findUnique({
-          where: { email: recipientEmail },
-        });
-        if (recipient) {
-          recipients.push({
-            emailId: email.id,
-            recipientId: recipient.id,
-            type: 'TO',
-          });
+    // Resolve recipients — collect unknown emails to warn
+    const unknownEmails = [];
+    const recipientRows = [];
+
+    const resolveRecipients = async (emails, type) => {
+      for (const recipientEmail of emails) {
+        const user = await prisma.user.findUnique({ where: { email: recipientEmail } });
+        if (user) {
+          recipientRows.push({ emailId: email.id, recipientId: user.id, type });
+        } else {
+          unknownEmails.push(recipientEmail);
         }
       }
-    }
+    };
 
-    // CC recipients
-    if (cc && cc.length > 0) {
-      for (const recipientEmail of cc) {
-        const recipient = await prisma.user.findUnique({
-          where: { email: recipientEmail },
-        });
-        if (recipient) {
-          recipients.push({
-            emailId: email.id,
-            recipientId: recipient.id,
-            type: 'CC',
-          });
-        }
-      }
-    }
+    await resolveRecipients(to, 'TO');
+    if (cc?.length) await resolveRecipients(cc, 'CC');
+    if (bcc?.length) await resolveRecipients(bcc, 'BCC');
 
-    // BCC recipients
-    if (bcc && bcc.length > 0) {
-      for (const recipientEmail of bcc) {
-        const recipient = await prisma.user.findUnique({
-          where: { email: recipientEmail },
-        });
-        if (recipient) {
-          recipients.push({
-            emailId: email.id,
-            recipientId: recipient.id,
-            type: 'BCC',
-          });
-        }
-      }
+    if (recipientRows.length > 0) {
+      await prisma.emailRecipient.createMany({ data: recipientRows });
     }
-
-    await prisma.emailRecipient.createMany({
-      data: recipients,
-    });
 
     res.status(201).json({
       message: 'Email sent successfully',
       email,
+      unknownRecipients: unknownEmails.length > 0 ? unknownEmails : undefined,
     });
   } catch (error) {
     console.error('Send email error:', error);
@@ -79,38 +105,171 @@ export const sendEmail = async (req, res) => {
   }
 };
 
+// ─── Drafts ──────────────────────────────────────────────────────────────────
+
+export const saveDraft = async (req, res) => {
+  try {
+    const { id, to, cc, bcc, subject, body, attachments: rawAttachments = [] } = req.body;
+    const senderId = req.user.id;
+
+    if (id) {
+      // Update existing draft
+      const existing = await prisma.email.findFirst({
+        where: { id, senderId, isDraft: true },
+      });
+      if (!existing) {
+        return res.status(404).json({ error: 'Draft not found' });
+      }
+
+      // Replace attachments
+      await prisma.attachment.deleteMany({ where: { emailId: id } });
+
+      const draft = await prisma.email.update({
+        where: { id },
+        data: {
+          subject: subject || '',
+          body: body || '',
+          sentAt: new Date(),
+          attachments: {
+            create: rawAttachments.map((a) => ({
+              filename: a.filename,
+              mimeType: a.mimeType,
+              size: a.size,
+              data: a.data,
+            })),
+          },
+        },
+      });
+
+      // Replace recipient hints (we store them even for drafts so we can restore To/CC/BCC)
+      await prisma.emailRecipient.deleteMany({ where: { emailId: id } });
+      await saveRecipientHints(draft.id, to, cc, bcc);
+
+      return res.json({ message: 'Draft updated', draft });
+    }
+
+    // Create new draft
+    const draft = await prisma.email.create({
+      data: {
+        subject: subject || '',
+        body: body || '',
+        senderId,
+        isDraft: true,
+        attachments: {
+          create: rawAttachments.map((a) => ({
+            filename: a.filename,
+            mimeType: a.mimeType,
+            size: a.size,
+            data: a.data,
+          })),
+        },
+      },
+    });
+
+    await saveRecipientHints(draft.id, to, cc, bcc);
+
+    res.status(201).json({ message: 'Draft saved', draft });
+  } catch (error) {
+    console.error('Save draft error:', error);
+    res.status(500).json({ error: 'Failed to save draft' });
+  }
+};
+
+// Store To/CC/BCC as recipients (resolved only for registered users)
+async function saveRecipientHints(emailId, to, cc, bcc) {
+  const rows = [];
+  const addHints = async (emails, type) => {
+    if (!emails?.length) return;
+    for (const e of emails) {
+      const user = await prisma.user.findUnique({ where: { email: e } });
+      if (user) rows.push({ emailId, recipientId: user.id, type });
+    }
+  };
+  await addHints(to, 'TO');
+  await addHints(cc, 'CC');
+  await addHints(bcc, 'BCC');
+  if (rows.length) await prisma.emailRecipient.createMany({ data: rows });
+}
+
+export const getDrafts = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const drafts = await prisma.email.findMany({
+      where: { senderId: userId, isDraft: true },
+      include: {
+        recipients: {
+          include: {
+            recipient: { select: { id: true, name: true, email: true } },
+          },
+        },
+        attachments: {
+          select: { id: true, filename: true, mimeType: true, size: true },
+        },
+      },
+      orderBy: { sentAt: 'desc' },
+    });
+
+    res.json({ drafts });
+  } catch (error) {
+    console.error('Get drafts error:', error);
+    res.status(500).json({ error: 'Failed to get drafts' });
+  }
+};
+
+export const deleteDraft = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+
+    const draft = await prisma.email.findFirst({
+      where: { id, senderId: userId, isDraft: true },
+    });
+    if (!draft) return res.status(404).json({ error: 'Draft not found' });
+
+    await prisma.email.delete({ where: { id } });
+    res.json({ message: 'Draft deleted' });
+  } catch (error) {
+    console.error('Delete draft error:', error);
+    res.status(500).json({ error: 'Failed to delete draft' });
+  }
+};
+
+// ─── Inbox / folders ─────────────────────────────────────────────────────────
+
 export const getInbox = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const emails = await prisma.emailRecipient.findMany({
+    const recipientRows = await prisma.emailRecipient.findMany({
       where: {
         recipientId: userId,
         email: {
-          isBin: false,
+          isDraft: false,
+          deletes: { none: { userId } },
           isArchived: false,
         },
       },
       include: {
         email: {
           include: {
-            sender: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                verified: true,
-              },
-            },
+            sender: { select: { id: true, name: true, email: true, verified: true } },
+            attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+            stars: { where: { userId }, select: { id: true } },
           },
         },
       },
-      orderBy: {
-        email: {
-          sentAt: 'desc',
-        },
-      },
+      orderBy: { email: { sentAt: 'desc' } },
     });
+
+    const emails = recipientRows.map((row) => ({
+      ...row.email,
+      isRead: row.isRead,
+      readAt: row.readAt,
+      recipientType: row.type,
+      isStarred: row.email.stars?.length > 0,
+      stars: undefined,
+    }));
 
     res.json({ emails });
   } catch (error) {
@@ -126,28 +285,28 @@ export const getSentEmails = async (req, res) => {
     const emails = await prisma.email.findMany({
       where: {
         senderId: userId,
-        isBin: false,
+        isDraft: false,
+        deletes: { none: { userId } },
       },
       include: {
         recipients: {
           include: {
-            recipient: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                verified: true,
-              },
-            },
+            recipient: { select: { id: true, name: true, email: true, verified: true } },
           },
         },
+        attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+        stars: { where: { userId }, select: { id: true } },
       },
-      orderBy: {
-        sentAt: 'desc',
-      },
+      orderBy: { sentAt: 'desc' },
     });
 
-    res.json({ emails });
+    const shaped = emails.map((e) => ({
+      ...e,
+      isStarred: e.stars?.length > 0,
+      stars: undefined,
+    }));
+
+    res.json({ emails: shaped });
   } catch (error) {
     console.error('Get sent emails error:', error);
     res.status(500).json({ error: 'Failed to get sent emails' });
@@ -159,107 +318,82 @@ export const getEmailById = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    const emailRecipient = await prisma.emailRecipient.findFirst({
-      where: {
-        emailId: id,
-        recipientId: userId,
-      },
+    // Try as recipient first
+    const recipientRow = await prisma.emailRecipient.findFirst({
+      where: { emailId: id, recipientId: userId },
       include: {
         email: {
           include: {
-            sender: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                verified: true,
-              },
-            },
+            sender: { select: { id: true, name: true, email: true, verified: true } },
             recipients: {
               include: {
-                recipient: {
-                  select: {
-                    id: true,
-                    name: true,
-                    email: true,
-                    verified: true,
-                  },
-                },
+                recipient: { select: { id: true, name: true, email: true, verified: true } },
               },
             },
+            attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+            stars: { where: { userId }, select: { id: true } },
           },
         },
       },
     });
 
-    if (!emailRecipient) {
-      return res.status(404).json({ error: 'Email not found' });
+    if (recipientRow) {
+      // Mark as read
+      await prisma.emailRecipient.update({
+        where: { id: recipientRow.id },
+        data: { isRead: true, readAt: new Date() },
+      });
+
+      const email = {
+        ...recipientRow.email,
+        isRead: true,
+        recipientType: recipientRow.type,
+        isStarred: recipientRow.email.stars?.length > 0,
+        stars: undefined,
+      };
+      return res.json({ email });
     }
 
-    // Mark as read
-    await prisma.emailRecipient.update({
-      where: { id: emailRecipient.id },
-      data: { isRead: true, readAt: new Date() },
+    // Try as sender (for sent/draft view)
+    const senderEmail = await prisma.email.findFirst({
+      where: { id, senderId: userId },
+      include: {
+        sender: { select: { id: true, name: true, email: true, verified: true } },
+        recipients: {
+          include: {
+            recipient: { select: { id: true, name: true, email: true, verified: true } },
+          },
+        },
+        attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+        stars: { where: { userId }, select: { id: true } },
+      },
     });
 
-    res.json({ email: emailRecipient.email });
+    if (senderEmail) {
+      const email = {
+        ...senderEmail,
+        isStarred: senderEmail.stars?.length > 0,
+        stars: undefined,
+      };
+      return res.json({ email });
+    }
+
+    return res.status(404).json({ error: 'Email not found' });
   } catch (error) {
     console.error('Get email error:', error);
     res.status(500).json({ error: 'Failed to get email' });
   }
 };
 
-export const deleteEmail = async (req, res) => {
-  try {
-    const { id } = req.params;
-    const userId = req.user.id;
-
-    // Check if user is sender
-    const email = await prisma.email.findFirst({
-      where: {
-        id,
-        senderId: userId,
-      },
-    });
-
-    if (email) {
-      await prisma.email.update({
-        where: { id },
-        data: { isBin: true },
-      });
-    } else {
-      // Check if user is recipient
-      const emailRecipient = await prisma.emailRecipient.findFirst({
-        where: {
-          emailId: id,
-          recipientId: userId,
-        },
-      });
-
-      if (!emailRecipient) {
-        return res.status(404).json({ error: 'Email not found' });
-      }
-
-      await prisma.email.update({
-        where: { id },
-        data: { isBin: true },
-      });
-    }
-
-    res.json({ message: 'Email moved to bin' });
-  } catch (error) {
-    console.error('Delete email error:', error);
-    res.status(500).json({ error: 'Failed to delete email' });
-  }
-};
+// ─── Per-user star ────────────────────────────────────────────────────────────
 
 export const starEmail = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // Check if user is sender or recipient
-    const email = await prisma.email.findFirst({
+    // Verify user has access to this email
+    const hasAccess = await prisma.email.findFirst({
       where: {
         id,
         OR: [
@@ -268,21 +402,21 @@ export const starEmail = async (req, res) => {
         ],
       },
     });
+    if (!hasAccess) return res.status(404).json({ error: 'Email not found' });
 
-    if (!email) {
-      return res.status(404).json({ error: 'Email not found' });
+    const existing = await prisma.emailStar.findUnique({
+      where: { emailId_userId: { emailId: id, userId } },
+    });
+
+    if (existing) {
+      await prisma.emailStar.delete({
+        where: { emailId_userId: { emailId: id, userId } },
+      });
+      return res.json({ message: 'Email unstarred', isStarred: false });
     }
 
-    // Toggle star status
-    const updatedEmail = await prisma.email.update({
-      where: { id },
-      data: { isStarred: !email.isStarred },
-    });
-
-    res.json({ 
-      message: updatedEmail.isStarred ? 'Email starred' : 'Email unstarred',
-      isStarred: updatedEmail.isStarred
-    });
+    await prisma.emailStar.create({ data: { emailId: id, userId } });
+    res.json({ message: 'Email starred', isStarred: true });
   } catch (error) {
     console.error('Star email error:', error);
     res.status(500).json({ error: 'Failed to star email' });
@@ -293,41 +427,28 @@ export const getStarredEmails = async (req, res) => {
   try {
     const userId = req.user.id;
 
-    const emails = await prisma.email.findMany({
-      where: {
-        isStarred: true,
-        isBin: false,
-        OR: [
-          { senderId: userId },
-          { recipients: { some: { recipientId: userId } } },
-        ],
-      },
+    const stars = await prisma.emailStar.findMany({
+      where: { userId },
       include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            verified: true,
-          },
-        },
-        recipients: {
+        email: {
           include: {
-            recipient: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                verified: true,
+            sender: { select: { id: true, name: true, email: true, verified: true } },
+            recipients: {
+              include: {
+                recipient: { select: { id: true, name: true, email: true, verified: true } },
               },
             },
+            attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+            deletes: { where: { userId }, select: { id: true } },
           },
         },
       },
-      orderBy: {
-        sentAt: 'desc',
-      },
+      orderBy: { starredAt: 'desc' },
     });
+
+    const emails = stars
+      .filter((s) => s.email.deletes?.length === 0)
+      .map((s) => ({ ...s.email, isStarred: true, deletes: undefined }));
 
     res.json({ emails });
   } catch (error) {
@@ -336,44 +457,65 @@ export const getStarredEmails = async (req, res) => {
   }
 };
 
-export const getBinEmails = async (req, res) => {
+// ─── Per-user delete / bin ────────────────────────────────────────────────────
+
+export const deleteEmail = async (req, res) => {
   try {
+    const { id } = req.params;
     const userId = req.user.id;
 
-    const emails = await prisma.email.findMany({
+    const hasAccess = await prisma.email.findFirst({
       where: {
-        isBin: true,
+        id,
         OR: [
           { senderId: userId },
           { recipients: { some: { recipientId: userId } } },
         ],
       },
+    });
+    if (!hasAccess) return res.status(404).json({ error: 'Email not found' });
+
+    await prisma.emailDelete.upsert({
+      where: { emailId_userId: { emailId: id, userId } },
+      update: {},
+      create: { emailId: id, userId },
+    });
+
+    res.json({ message: 'Email moved to bin' });
+  } catch (error) {
+    console.error('Delete email error:', error);
+    res.status(500).json({ error: 'Failed to delete email' });
+  }
+};
+
+export const getBinEmails = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const deleted = await prisma.emailDelete.findMany({
+      where: { userId },
       include: {
-        sender: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            verified: true,
-          },
-        },
-        recipients: {
+        email: {
           include: {
-            recipient: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-                verified: true,
+            sender: { select: { id: true, name: true, email: true, verified: true } },
+            recipients: {
+              include: {
+                recipient: { select: { id: true, name: true, email: true, verified: true } },
               },
             },
+            attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
+            stars: { where: { userId }, select: { id: true } },
           },
         },
       },
-      orderBy: {
-        sentAt: 'desc',
-      },
+      orderBy: { deletedAt: 'desc' },
     });
+
+    const emails = deleted.map((d) => ({
+      ...d.email,
+      isStarred: d.email.stars?.length > 0,
+      stars: undefined,
+    }));
 
     res.json({ emails });
   } catch (error) {
@@ -387,25 +529,13 @@ export const restoreEmail = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // Check if user is sender or recipient
-    const email = await prisma.email.findFirst({
-      where: {
-        id,
-        isBin: true,
-        OR: [
-          { senderId: userId },
-          { recipients: { some: { recipientId: userId } } },
-        ],
-      },
+    const deleted = await prisma.emailDelete.findUnique({
+      where: { emailId_userId: { emailId: id, userId } },
     });
+    if (!deleted) return res.status(404).json({ error: 'Email not found in bin' });
 
-    if (!email) {
-      return res.status(404).json({ error: 'Email not found in bin' });
-    }
-
-    await prisma.email.update({
-      where: { id },
-      data: { isBin: false },
+    await prisma.emailDelete.delete({
+      where: { emailId_userId: { emailId: id, userId } },
     });
 
     res.json({ message: 'Email restored from bin' });
@@ -420,25 +550,50 @@ export const permanentlyDeleteEmail = async (req, res) => {
     const { id } = req.params;
     const userId = req.user.id;
 
-    // Check if user is sender
-    const email = await prisma.email.findFirst({
-      where: {
-        id,
-        senderId: userId,
-      },
-    });
-
+    // Only the sender can permanently delete
+    const email = await prisma.email.findFirst({ where: { id, senderId: userId } });
     if (!email) {
-      return res.status(404).json({ error: 'Email not found or you do not have permission to delete it' });
+      return res.status(404).json({ error: 'Email not found or insufficient permission' });
     }
 
-    await prisma.email.delete({
-      where: { id },
-    });
-
+    await prisma.email.delete({ where: { id } });
     res.json({ message: 'Email permanently deleted' });
   } catch (error) {
     console.error('Permanently delete email error:', error);
     res.status(500).json({ error: 'Failed to permanently delete email' });
+  }
+};
+
+// ─── Attachment download ──────────────────────────────────────────────────────
+
+export const getAttachment = async (req, res) => {
+  try {
+    const { emailId, attachmentId } = req.params;
+    const userId = req.user.id;
+
+    // Verify access
+    const hasAccess = await prisma.email.findFirst({
+      where: {
+        id: emailId,
+        OR: [
+          { senderId: userId },
+          { recipients: { some: { recipientId: userId } } },
+        ],
+      },
+    });
+    if (!hasAccess) return res.status(403).json({ error: 'Access denied' });
+
+    const attachment = await prisma.attachment.findFirst({
+      where: { id: attachmentId, emailId },
+    });
+    if (!attachment) return res.status(404).json({ error: 'Attachment not found' });
+
+    const buffer = Buffer.from(attachment.data, 'base64');
+    res.setHeader('Content-Type', attachment.mimeType);
+    res.setHeader('Content-Disposition', `attachment; filename="${attachment.filename}"`);
+    res.send(buffer);
+  } catch (error) {
+    console.error('Get attachment error:', error);
+    res.status(500).json({ error: 'Failed to get attachment' });
   }
 };

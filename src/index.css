@@ -14,3 +14,23 @@ body {
 * {
   box-sizing: border-box;
 }
+
+/* Compose modal - scrollbar only visible when content overflows */
+.compose-scroll::-webkit-scrollbar {
+  width: 6px;
+}
+.compose-scroll::-webkit-scrollbar-track {
+  background: transparent;
+}
+.compose-scroll::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+  transition: background 0.2s;
+}
+.compose-scroll:hover::-webkit-scrollbar-thumb,
+.compose-scroll:focus-within::-webkit-scrollbar-thumb {
+  background: #d1d5db;
+}
+.compose-scroll::-webkit-scrollbar-thumb:hover {
+  background: #9ca3af;
+}

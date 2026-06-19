@@ -9,6 +9,15 @@ const getAuthHeaders = () => {
   };
 };
 
+// Helper: parse response and throw on HTTP errors
+const handleResponse = async (response) => {
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error || `Request failed (${response.status})`);
+  }
+  return data;
+};
+
 // Auth API
 export const authAPI = {
   register: async (userData) => {
@@ -45,42 +54,42 @@ export const emailAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify(emailData),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getInbox: async () => {
     const response = await fetch(`${API_URL}/emails/inbox`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getSentEmails: async () => {
     const response = await fetch(`${API_URL}/emails/sent`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getStarredEmails: async () => {
     const response = await fetch(`${API_URL}/emails/starred`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getBinEmails: async () => {
     const response = await fetch(`${API_URL}/emails/bin`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getEmailById: async (id) => {
     const response = await fetch(`${API_URL}/emails/${id}`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   deleteEmail: async (id) => {
@@ -88,7 +97,7 @@ export const emailAPI = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   starEmail: async (id) => {
@@ -96,7 +105,7 @@ export const emailAPI = {
       method: 'PUT',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   restoreEmail: async (id) => {
@@ -104,7 +113,7 @@ export const emailAPI = {
       method: 'PUT',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   permanentlyDeleteEmail: async (id) => {
@@ -112,8 +121,45 @@ export const emailAPI = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
+
+  // Drafts
+  saveDraft: async (draftData) => {
+    const response = await fetch(`${API_URL}/emails/drafts`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(draftData),
+    });
+    return handleResponse(response);
+  },
+
+  updateDraft: async (draftData) => {
+    const response = await fetch(`${API_URL}/emails/drafts`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+      body: JSON.stringify(draftData),
+    });
+    return handleResponse(response);
+  },
+
+  getDrafts: async () => {
+    const response = await fetch(`${API_URL}/emails/drafts`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  deleteDraft: async (id) => {
+    const response = await fetch(`${API_URL}/emails/drafts/${id}`, {
+      method: 'DELETE',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  getAttachmentUrl: (emailId, attachmentId) =>
+    `${API_URL}/emails/${emailId}/attachments/${attachmentId}`,
 };
 
 // Knocc API

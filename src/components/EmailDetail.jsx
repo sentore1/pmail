@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2 } from 'lucide-react'
+import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download } from 'lucide-react'
 import { knoccAPI, userAPI, emailAPI } from '../services/api'
 
 // Instagram/Twitter-style verification badge
@@ -9,7 +9,7 @@ const VerifiedBadge = ({ className = "w-4 h-4" }) => (
   </svg>
 )
 
-function EmailDetail({ email, viewType, onClose, onRefresh }) {
+function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }) {
   const isRequestView = viewType === 'knocc-requests'
   const [peopleTab, setPeopleTab] = useState('who-you-know')
   const [allPeople, setAllPeople] = useState([])
@@ -163,23 +163,23 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
         {/* People Grid */}
         <div className="p-5">
           <div className="grid grid-cols-3 gap-2">
-            {displayedPeople.map((person, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-xl p-1.5 hover:border-blue-300 transition-all">
+            {displayedPeople.map((person, idx) => {
+              const initials = (person.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+              const colors = ['from-blue-400 to-blue-600', 'from-purple-400 to-purple-600', 'from-green-400 to-green-600', 'from-orange-400 to-orange-600']
+              const color = colors[idx % colors.length]
+              return (
+              <div key={person.id || idx} className="border border-gray-200 rounded-xl p-1.5 hover:border-blue-300 transition-all">
                 <div className="flex items-start justify-between mb-1">
                   <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <div className={`w-7 h-7 bg-gradient-to-br ${person.color} rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
-                      {person.initials}
+                    <div className={`w-7 h-7 bg-gradient-to-br ${color} rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
+                      {initials}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-1">
                         <h3 className="text-xs font-medium text-gray-900 truncate leading-tight">{person.name}</h3>
-                        {person.verified ? (
-                          <VerifiedBadge className="w-3 h-3 flex-shrink-0" />
-                        ) : (
-                          <div className="w-2.5 h-2.5 rounded-full border border-gray-300 flex-shrink-0"></div>
-                        )}
+                        {person.verified && <VerifiedBadge className="w-3 h-3 flex-shrink-0" />}
                       </div>
-                      <p className="text-xs text-gray-500 truncate leading-tight">{person.profession}</p>
+                      <p className="text-xs text-gray-500 truncate leading-tight">{person.country || person.email}</p>
                     </div>
                   </div>
                   <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-1">
@@ -189,7 +189,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
                       </div>
                       <span className="text-xs font-medium text-gray-700">${person.knoccPrice}</span>
                     </div>
-                    <button 
+                    <button
                       onClick={() => handleKnoccClick(person)}
                       className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded transition-colors font-medium"
                     >
@@ -198,8 +198,12 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
                   </div>
                 </div>
               </div>
-            ))}
+              )
+            })}
           </div>
+          {displayedPeople.length === 0 && (
+            <p className="text-sm text-gray-400 text-center py-6">No people found</p>
+          )}
         </div>
       </div>
     )
@@ -224,6 +228,11 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
   }
 
   if (isRequestView) {
+    // Real API shape: request.sender.name, request.sender.email, request.reason, request.paymentAmount, request.paymentType, request.status
+    const senderName = email.sender?.name || email.senderName || email.sender || 'Unknown'
+    const senderEmail = email.sender?.email || email.email || ''
+    const country = email.sender?.country || email.additionalInfo?.country || ''
+
     return (
       <div className="flex-1 flex flex-col bg-white">
         {/* Header */}
@@ -234,16 +243,15 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
                 <Bell className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <h2 className="text-base font-medium text-gray-900">{email.sender}</h2>
-                <p className="text-sm text-gray-500">{email.email}</p>
+                <h2 className="text-base font-medium text-gray-900">{senderName}</h2>
+                <p className="text-sm text-gray-500">{senderEmail}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">{email.timestamp}</span>
-              <button 
-                onClick={onClose}
-                className="p-1.5 hover:bg-gray-100 rounded-md transition-colors"
-              >
+              <span className="text-xs text-gray-400">
+                {email.createdAt ? new Date(email.createdAt).toLocaleString() : email.timestamp}
+              </span>
+              <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -252,50 +260,65 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
 
         {/* Request Details */}
         <div className="flex-1 p-5 overflow-y-auto">
-          <div className="max-w-2xl">
-            <div className="mb-5">
+          <div className="max-w-2xl space-y-5">
+            <div>
               <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Request Reason</h3>
               <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md">{email.reason}</p>
             </div>
 
-            <div className="mb-5">
-              <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Additional Information</h3>
-              <div className="bg-gray-50 p-3 rounded-md space-y-1.5">
-                <div className="flex justify-between text-sm">
-                  <span className="text-gray-600">Country:</span>
-                  <span className="text-gray-900 font-medium">{email.additionalInfo?.country}</span>
-                </div>
+            {email.message && (
+              <div>
+                <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Message</h3>
+                <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md">{email.message}</p>
+              </div>
+            )}
+
+            <div>
+              <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Details</h3>
+              <div className="bg-gray-50 p-3 rounded-md space-y-2">
+                {country && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Country:</span>
+                    <span className="text-gray-900 font-medium">{country}</span>
+                  </div>
+                )}
                 {email.paymentType && (
                   <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Payment:</span>
-                    <span className={`font-medium ${
-                      email.paymentType === 'pryro' ? 'text-purple-700' : 'text-green-700'
-                    }`}>
-                      {email.paymentAmount} {email.paymentType === 'pryro' ? '(Priority)' : '(Standard)'}
+                    <span className="text-gray-600">Payment type:</span>
+                    <span className={`font-medium ${email.paymentType === 'PRYRO' ? 'text-purple-700' : 'text-green-700'}`}>
+                      {email.paymentType}
                     </span>
+                  </div>
+                )}
+                {email.paymentAmount != null && (
+                  <div className="flex justify-between text-sm">
+                    <span className="text-gray-600">Amount paid:</span>
+                    <span className="font-semibold text-gray-900">${email.paymentAmount}</span>
                   </div>
                 )}
               </div>
             </div>
 
-            {email.status === 'pending' && (
+            {email.status === 'PENDING' && (
               <div className="flex gap-2">
-                <button 
-                  onClick={handleApproveRequest}
-                  disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2.5 px-4 rounded-md transition-colors text-sm font-medium"
-                >
+                <button onClick={handleApproveRequest} disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2.5 px-4 rounded-md transition-colors text-sm font-medium">
                   <CheckCircle className="w-4 h-4" />
-                  {loading ? 'Processing...' : 'Approve & Add Contact'}
+                  {loading ? 'Processing…' : 'Approve & Add Contact'}
                 </button>
-                <button 
-                  onClick={handleDeclineRequest}
-                  disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white py-2.5 px-4 rounded-md transition-colors text-sm font-medium"
-                >
+                <button onClick={handleDeclineRequest} disabled={loading}
+                  className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white py-2.5 px-4 rounded-md transition-colors text-sm font-medium">
                   <XCircle className="w-4 h-4" />
-                  {loading ? 'Processing...' : 'Decline Request'}
+                  {loading ? 'Processing…' : 'Decline'}
                 </button>
+              </div>
+            )}
+
+            {email.status !== 'PENDING' && (
+              <div className={`p-3 rounded-md text-sm font-medium text-center ${
+                email.status === 'APPROVED' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
+              }`}>
+                {email.status === 'APPROVED' ? '✓ Request approved' : '✕ Request declined'}
               </div>
             )}
           </div>
@@ -316,6 +339,30 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
     }
   }
 
+  // Build reply/forward context objects
+  const buildReplyContext = () => ({
+    senderEmail: email.sender?.email || email.email || '',
+    senderName: email.sender?.name || email.sender || '',
+    subject: email.subject || '',
+    body: email.body || '',
+    date: email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
+  })
+
+  const buildForwardContext = () => ({
+    senderEmail: email.sender?.email || email.email || '',
+    senderName: email.sender?.name || email.sender || '',
+    subject: email.subject || '',
+    body: email.body || '',
+    date: email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
+  })
+
+  const formatBytes = (bytes) => {
+    if (!bytes) return ''
+    if (bytes < 1024) return `${bytes} B`
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  }
+
   return (
     <div className="flex-1 flex flex-col bg-white">
       {/* Header */}
@@ -323,63 +370,95 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-medium text-gray-900">{email.subject}</h2>
           <div className="flex items-center gap-1">
-            <button 
-              onClick={handleStarEmail}
-              disabled={loading}
+            <button onClick={handleStarEmail} disabled={loading}
               className="p-1.5 hover:bg-yellow-50 rounded-md transition-colors disabled:opacity-50"
-              title={email.starred ? "Unstar" : "Star"}
-            >
-              <Star className={`w-4 h-4 ${email.starred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+              title={email.isStarred ? 'Unstar' : 'Star'}>
+              <Star className={`w-4 h-4 ${email.isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
             </button>
-            <button 
-              onClick={handleDeleteEmail}
-              disabled={loading}
-              className="p-1.5 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
-              title="Delete"
-            >
+            <button onClick={handleDeleteEmail} disabled={loading}
+              className="p-1.5 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50" title="Delete">
               <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
             </button>
             <button className="p-1.5 hover:bg-gray-50 rounded-md transition-colors">
               <HelpCircle className="w-4 h-4 text-gray-400" />
             </button>
-            <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium ml-2">
-              A
-            </div>
           </div>
         </div>
 
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 bg-purple-50 rounded-full flex items-center justify-center">
-            <span className="text-purple-600 font-medium text-sm">{email.sender[0]}</span>
+            <span className="text-purple-600 font-medium text-sm">
+              {(email.sender?.name || email.sender || '?')[0].toUpperCase()}
+            </span>
           </div>
           <div className="flex-1">
             <div className="flex items-center gap-2">
-              <span className="font-medium text-gray-900 text-sm">{email.sender}</span>
-              {email.knoccApproved && (
-                <span className="inline-flex items-center gap-1 text-xs bg-green-50 text-green-700 px-2 py-0.5 rounded-full">
-                  <CheckCircle className="w-3 h-3" />
-                  Approved
+              <span className="font-medium text-gray-900 text-sm">
+                {email.sender?.name || email.sender}
+              </span>
+              {email.sender?.verified && (
+                <span className="inline-flex items-center gap-1 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                  ✓ Verified
                 </span>
               )}
             </div>
-            <p className="text-xs text-gray-500">{email.email}</p>
+            <p className="text-xs text-gray-500">{email.sender?.email || email.email}</p>
           </div>
-          <span className="text-xs text-gray-400">{email.timestamp}</span>
+          <span className="text-xs text-gray-400">
+            {email.sentAt ? new Date(email.sentAt).toLocaleString() : email.timestamp}
+          </span>
         </div>
       </div>
 
       {/* Email Body */}
       <div className="flex-1 p-5 overflow-y-auto">
         <div className="max-w-2xl">
-          <p className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap">
-            {email.preview}
-            {'\n\n'}
-            Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris.
-            {'\n\n'}
-            Best regards,{'\n'}
-            {email.sender}
-          </p>
+          {/* Render HTML body safely */}
+          <div
+            className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
+            dangerouslySetInnerHTML={{ __html: email.body || email.preview || '(No content)' }}
+          />
+
+          {/* Attachments */}
+          {email.attachments?.length > 0 && (
+            <div className="mt-6 pt-4 border-t border-gray-100">
+              <p className="text-xs font-medium text-gray-500 mb-3 uppercase tracking-wide">
+                {email.attachments.length} Attachment{email.attachments.length > 1 ? 's' : ''}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {email.attachments.map((att) => (
+                  <a key={att.id}
+                    href={emailAPI.getAttachmentUrl(email.id, att.id)}
+                    target="_blank" rel="noreferrer"
+                    className="flex items-center gap-2 bg-gray-50 border border-gray-200 hover:border-blue-300 px-3 py-2 rounded-lg text-sm transition-colors">
+                    <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
+                    <div className="min-w-0">
+                      <p className="text-gray-700 truncate max-w-[160px]">{att.filename}</p>
+                      <p className="text-xs text-gray-400">{formatBytes(att.size)}</p>
+                    </div>
+                    <Download className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                  </a>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
+      </div>
+
+      {/* Reply / Forward actions */}
+      <div className="px-5 py-3 border-t border-gray-100 flex items-center gap-2">
+        {onReply && (
+          <button onClick={() => onReply(buildReplyContext())}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <Reply className="w-4 h-4" /> Reply
+          </button>
+        )}
+        {onForward && (
+          <button onClick={() => onForward(buildForwardContext())}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors">
+            <Forward className="w-4 h-4" /> Forward
+          </button>
+        )}
       </div>
 
       {/* Knocc Modal for People Directory */}
@@ -403,15 +482,20 @@ function EmailDetail({ email, viewType, onClose, onRefresh }) {
             <div className="p-5">
               <div className="mb-4">
                 <div className="flex items-center gap-3 mb-4">
-                  <div className={`w-12 h-12 bg-gradient-to-br ${selectedPerson.color} rounded-full flex items-center justify-center text-white text-lg font-medium`}>
-                    {selectedPerson.initials}
-                  </div>
+                  {(() => {
+                    const initials = (selectedPerson.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+                    return (
+                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-lg font-medium">
+                        {initials}
+                      </div>
+                    )
+                  })()}
                   <div>
                     <div className="flex items-center gap-1.5">
                       <h3 className="text-base font-medium text-gray-900">{selectedPerson.name}</h3>
                       {selectedPerson.verified && <VerifiedBadge className="w-4 h-4" />}
                     </div>
-                    <p className="text-sm text-gray-500">{selectedPerson.profession}</p>
+                    <p className="text-sm text-gray-500">{selectedPerson.country || selectedPerson.email}</p>
                   </div>
                 </div>
                 

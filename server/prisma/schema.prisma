@@ -43,6 +43,10 @@ model User {
   transactions      Transaction[]
   sentInvitations   Invitation[] @relation("SentInvitations")
 
+  // Per-user email flags
+  emailStars        EmailStar[]
+  emailDeletes      EmailDelete[]
+
   @@index([email])
 }
 
@@ -54,14 +58,62 @@ model Email {
   sender      User      @relation("SentEmails", fields: [senderId], references: [id], onDelete: Cascade)
   
   recipients  EmailRecipient[]
+  attachments Attachment[]
   
+  // Per-user flags (replaces global isStarred / isBin)
+  stars       EmailStar[]
+  deletes     EmailDelete[]
+
+  // Draft support
+  isDraft     Boolean   @default(false)
+
   sentAt      DateTime  @default(now())
+  // Keep for backward compat — no longer used for per-user logic
   isStarred   Boolean   @default(false)
   isArchived  Boolean   @default(false)
   isBin       Boolean   @default(false)
 
   @@index([senderId])
   @@index([sentAt])
+  @@index([isDraft])
+}
+
+// Per-user star flag
+model EmailStar {
+  id        String   @id @default(uuid())
+  emailId   String
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  starredAt DateTime @default(now())
+
+  @@unique([emailId, userId])
+  @@index([userId])
+}
+
+// Per-user soft-delete flag
+model EmailDelete {
+  id        String   @id @default(uuid())
+  emailId   String
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deletedAt DateTime @default(now())
+
+  @@unique([emailId, userId])
+  @@index([userId])
+}
+
+model Attachment {
+  id        String   @id @default(uuid())
+  emailId   String
+  email     Email    @relation(fields: [emailId], references: [id], onDelete: Cascade)
+  filename  String
+  mimeType  String
+  size      Int
+  data      String   // base64 encoded
+
+  @@index([emailId])
 }
 
 model EmailRecipient {

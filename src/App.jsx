@@ -7,7 +7,7 @@ import KnoccRequestModal from './components/KnoccRequestModal'
 import SettingsModal from './components/SettingsModal'
 import WalletModal from './components/WalletModal'
 import LoginPage from './components/LoginPage'
-import { authAPI, emailAPI, knoccAPI } from './services/api'
+import { authAPI, emailAPI, knoccAPI, userAPI } from './services/api'
 
 function App() {
   const [isAuthenticated, setIsAuthenticated] = useState(false)
@@ -18,10 +18,14 @@ function App() {
   const [sentEmails, setSentEmails] = useState([])
   const [starredEmails, setStarredEmails] = useState([])
   const [binEmails, setBinEmails] = useState([])
+  const [draftEmails, setDraftEmails] = useState([])
   const [contacts, setContacts] = useState([])
   const [blockedUsers, setBlockedUsers] = useState([])
   const [selectedEmail, setSelectedEmail] = useState(null)
   const [showCompose, setShowCompose] = useState(false)
+  const [composeReplyTo, setComposeReplyTo] = useState(null)
+  const [composeForwardOf, setComposeForwardOf] = useState(null)
+  const [composeDraft, setComposeDraft] = useState(null)
   const [showKnoccRequest, setShowKnoccRequest] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showWallet, setShowWallet] = useState(false)
@@ -61,6 +65,8 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       loadData()
+      // Always keep draft count fresh
+      emailAPI.getDrafts().then((r) => setDraftEmails(r.drafts || [])).catch(() => {})
     }
   }, [isAuthenticated, currentView, inboxView, knoccFilter])
 
@@ -80,6 +86,9 @@ function App() {
       } else if (currentView === 'sent') {
         const response = await emailAPI.getSentEmails()
         setSentEmails(response.emails || [])
+      } else if (currentView === 'drafts') {
+        const response = await emailAPI.getDrafts()
+        setDraftEmails(response.drafts || [])
       } else if (currentView === 'starred') {
         const response = await emailAPI.getStarredEmails()
         setStarredEmails(response.emails || [])
@@ -133,26 +142,20 @@ function App() {
   }
 
   const getDisplayEmails = () => {
-    if (currentView === 'knocc-requests') {
-      return requests
-    }
-    if (currentView === 'sent' || inboxView === 'sent') {
-      return sentEmails
-    }
-    if (currentView === 'starred') {
-      return starredEmails
-    }
-    if (currentView === 'bin') {
-      return binEmails
-    }
-    if (currentView === 'contacts') {
-      return contacts
-    }
-    if (currentView === 'blocked') {
-      return blockedUsers
-    }
+    if (currentView === 'knocc-requests') return requests
+    if (currentView === 'sent' || inboxView === 'sent') return sentEmails
+    if (currentView === 'starred') return starredEmails
+    if (currentView === 'bin') return binEmails
+    if (currentView === 'drafts') return draftEmails
+    if (currentView === 'contacts') return contacts
+    if (currentView === 'blocked') return blockedUsers
     return emails
   }
+
+  // Computed counts for sidebar badges
+  const unreadCount = emails.filter((e) => e.isRead === false).length
+  const knoccRequestCount = requests.filter((r) => r.status === 'PENDING').length
+  const draftCount = draftEmails.length
 
   return (
     <div className="flex h-screen bg-white">
@@ -175,6 +178,9 @@ function App() {
             setSelectedEmail(null)
           }}
           currentView={currentView}
+          unreadCount={unreadCount}
+          knoccRequestCount={knoccRequestCount}
+          draftCount={draftCount}
         />
         
         <div className="flex-1 flex relative">
@@ -222,7 +228,17 @@ function App() {
           <EmailList 
             emails={getDisplayEmails()}
             selectedEmail={selectedEmail}
-            onSelectEmail={setSelectedEmail}
+            onSelectEmail={(email) => {
+              // Drafts open in the compose modal for editing, not in the detail view
+              if (currentView === 'drafts') {
+                setComposeDraft(email)
+                setComposeReplyTo(null)
+                setComposeForwardOf(null)
+                setShowCompose(true)
+              } else {
+                setSelectedEmail(email)
+              }
+            }}
             viewType={currentView}
             onViewChange={(view) => {
               if (currentView === 'knocc-requests') {
@@ -239,6 +255,16 @@ function App() {
             viewType={currentView}
             onClose={() => setSelectedEmail(null)}
             onRefresh={handleRefresh}
+            onReply={(ctx) => {
+              setComposeReplyTo(ctx)
+              setComposeForwardOf(null)
+              setShowCompose(true)
+            }}
+            onForward={(ctx) => {
+              setComposeForwardOf(ctx)
+              setComposeReplyTo(null)
+              setShowCompose(true)
+            }}
           />
         </div>
       </div>
@@ -247,12 +273,21 @@ function App() {
         <ComposeModal 
           onClose={() => {
             setShowCompose(false)
+            setComposeReplyTo(null)
+            setComposeForwardOf(null)
+            setComposeDraft(null)
             handleRefresh()
           }}
           onSendKnoccRequest={() => {
             setShowCompose(false)
+            setComposeReplyTo(null)
+            setComposeForwardOf(null)
+            setComposeDraft(null)
             setShowKnoccRequest(true)
           }}
+          replyTo={composeReplyTo}
+          forwardOf={composeForwardOf}
+          draft={composeDraft}
         />
       )}
 
