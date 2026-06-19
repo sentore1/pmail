@@ -8,6 +8,7 @@ import knoccRoutes from './routes/knocc.js';
 import walletRoutes from './routes/wallet.js';
 import invitationRoutes from './routes/invitations.js';
 import googleRoutes from './routes/google.js';
+import intelligenceRoutes from './routes/intelligence.js';
 
 dotenv.config();
 
@@ -19,8 +20,8 @@ app.use(cors({
   origin: process.env.CLIENT_URL || 'http://localhost:5173',
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: true, limit: '25mb' }));
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -30,6 +31,7 @@ app.use('/api/knocc', knoccRoutes);
 app.use('/api/wallet', walletRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/google', googleRoutes);
+app.use('/api/intelligence', intelligenceRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

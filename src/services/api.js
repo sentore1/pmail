@@ -26,7 +26,7 @@ export const authAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(userData),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   login: async (email, password) => {
@@ -35,14 +35,23 @@ export const authAPI = {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ email, password }),
     });
-    return response.json();
+    return handleResponse(response);
+  },
+
+  checkUsername: async (username) => {
+    const response = await fetch(`${API_URL}/auth/check-username`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username }),
+    });
+    return handleResponse(response);
   },
 
   getMe: async () => {
     const response = await fetch(`${API_URL}/auth/me`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 };
 
@@ -170,14 +179,14 @@ export const knoccAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify(requestData),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getRequests: async (filter = 'all') => {
     const response = await fetch(`${API_URL}/knocc/requests?filter=${filter}`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   respondToRequest: async (id, action) => {
@@ -186,7 +195,7 @@ export const knoccAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ action }),
     });
-    return response.json();
+    return handleResponse(response);
   },
 };
 
@@ -196,21 +205,21 @@ export const userAPI = {
     const response = await fetch(`${API_URL}/users/search?query=${encodeURIComponent(query)}`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getContacts: async () => {
     const response = await fetch(`${API_URL}/users/contacts`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getBlockedUsers: async () => {
     const response = await fetch(`${API_URL}/users/blocked`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   blockUser: async (userId) => {
@@ -218,7 +227,7 @@ export const userAPI = {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   unblockUser: async (userId) => {
@@ -226,7 +235,7 @@ export const userAPI = {
       method: 'DELETE',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   updateProfile: async (profileData) => {
@@ -235,7 +244,7 @@ export const userAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify(profileData),
     });
-    return response.json();
+    return handleResponse(response);
   },
 };
 
@@ -247,7 +256,7 @@ export const walletAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ amount }),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   createLightningInvoice: async (amount) => {
@@ -256,14 +265,14 @@ export const walletAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ amount }),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   checkInvoiceStatus: async (invoiceId) => {
-    const response = await fetch(`${API_URL}/wallet/invoice/${invoiceId}/status`, {
+    const response = await fetch(`${API_URL}/wallet/invoice/${encodeURIComponent(invoiceId)}/status`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   withdrawFunds: async (amount, paymentRequest = null) => {
@@ -272,21 +281,21 @@ export const walletAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ amount, paymentRequest }),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getBalance: async () => {
     const response = await fetch(`${API_URL}/wallet/balance`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
-  getTransactions: async () => {
-    const response = await fetch(`${API_URL}/wallet/transactions`, {
+  getTransactions: async (page = 1, limit = 50) => {
+    const response = await fetch(`${API_URL}/wallet/transactions?page=${page}&limit=${limit}`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 };
 
@@ -298,7 +307,7 @@ export const invitationAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ email, name }),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   sendBulkInvitations: async (contacts) => {
@@ -307,24 +316,22 @@ export const invitationAPI = {
       headers: getAuthHeaders(),
       body: JSON.stringify({ contacts }),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   getSentInvitations: async (status = null) => {
-    const url = status 
-      ? `${API_URL}/invitations?status=${status}` 
+    const url = status
+      ? `${API_URL}/invitations?status=${status}`
       : `${API_URL}/invitations`;
-    const response = await fetch(url, {
-      headers: getAuthHeaders(),
-    });
-    return response.json();
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    return handleResponse(response);
   },
 
   getInvitationStats: async () => {
     const response = await fetch(`${API_URL}/invitations/stats`, {
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   resendInvitation: async (invitationId) => {
@@ -332,15 +339,15 @@ export const invitationAPI = {
       method: 'POST',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 
   cancelInvitation: async (invitationId) => {
-    const response = await fetch(`${API_URL}/invitations/${invitationId}`, {
-      method: 'DELETE',
+    const response = await fetch(`${API_URL}/invitations/${invitationId}/cancel`, {
+      method: 'POST',
       headers: getAuthHeaders(),
     });
-    return response.json();
+    return handleResponse(response);
   },
 };
 
@@ -370,4 +377,26 @@ export const googleAPI = {
     });
     return response.json();
   },
+
+  // AI learning — reads the user's own Pmail sent emails (no external OAuth needed)
+  getLearningProfile: async () => {
+    const response = await fetch(`${API_URL}/intelligence/learning-profile`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  runLearning: async () => {
+    const response = await fetch(`${API_URL}/intelligence/learn`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // Legacy Gmail OAuth stubs (kept for compatibility, not used without Google Cloud)
+  getGmailAuthUrl: async () => { throw new Error('Gmail OAuth not configured'); },
+  getGmailStatus: async () => ({ connected: false, lastSynced: null, learnedTopics: [] }),
+  revokeGmailAccess: async () => {},
+  syncGmailLearning: async () => {},
 };

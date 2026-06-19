@@ -94,6 +94,17 @@ export const sendEmail = async (req, res) => {
       await prisma.emailRecipient.createMany({ data: recipientRows });
     }
 
+    // If no TO recipient was found on the platform, abort
+    const resolvedTo = recipientRows.filter(r => r.type === 'TO');
+    if (resolvedTo.length === 0) {
+      // Clean up the orphaned email record
+      await prisma.email.delete({ where: { id: email.id } });
+      return res.status(422).json({
+        error: 'None of the recipients are registered on Pmail',
+        unknownRecipients: unknownEmails,
+      });
+    }
+
     res.status(201).json({
       message: 'Email sent successfully',
       email,
@@ -247,7 +258,7 @@ export const getInbox = async (req, res) => {
         email: {
           isDraft: false,
           deletes: { none: { userId } },
-          isArchived: false,
+          // isArchived intentionally excluded — it's a global flag no longer used per-user
         },
       },
       include: {

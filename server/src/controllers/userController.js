@@ -5,25 +5,28 @@ export const searchUsers = async (req, res) => {
     const { query } = req.query;
     const userId = req.user.id;
 
+    // Require at least 2 chars to prevent full-directory dumps
+    if (!query || query.trim().length < 2) {
+      return res.json({ users: [] });
+    }
+
+    const q = query.trim();
+
     const users = await prisma.user.findMany({
       where: {
         AND: [
           { id: { not: userId } },
           {
             OR: [
-              { name: { contains: query, mode: 'insensitive' } },
-              { email: { contains: query, mode: 'insensitive' } },
+              { name: { contains: q } },
+              { email: { contains: q } },
             ],
           },
         ],
       },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        country: true,
-        knoccPrice: true,
-        verified: true,
+        id: true, name: true, email: true,
+        country: true, knoccPrice: true, verified: true,
       },
       take: 20,
     });
@@ -80,29 +83,24 @@ export const getContacts = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, phoneNumber, age, gender, country, knoccPrice } = req.body;
+    const { name, phoneNumber, age, gender, country, knoccPrice, autoApprove, requireReason } = req.body;
 
     const user = await prisma.user.update({
       where: { id: userId },
       data: {
-        ...(name && { name }),
-        ...(phoneNumber !== undefined && { phoneNumber }),
-        ...(age && { age: parseInt(age) }),
-        ...(gender && { gender }),
-        ...(country && { country }),
+        ...(name && { name: name.trim() }),
+        ...(phoneNumber !== undefined && { phoneNumber: phoneNumber || null }),
+        ...(age !== undefined && { age: age ? parseInt(age) : null }),
+        ...(gender !== undefined && { gender: gender || null }),
+        ...(country !== undefined && { country: country || null }),
         ...(knoccPrice !== undefined && { knoccPrice: parseFloat(knoccPrice) }),
+        ...(autoApprove !== undefined && { autoApprove: Boolean(autoApprove) }),
+        ...(requireReason !== undefined && { requireReason: Boolean(requireReason) }),
       },
       select: {
-        id: true,
-        name: true,
-        email: true,
-        phoneNumber: true,
-        age: true,
-        gender: true,
-        country: true,
-        knoccPrice: true,
-        verified: true,
-        walletBalance: true,
+        id: true, name: true, email: true, phoneNumber: true,
+        age: true, gender: true, country: true, knoccPrice: true,
+        verified: true, walletBalance: true, autoApprove: true, requireReason: true,
       },
     });
 

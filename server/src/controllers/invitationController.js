@@ -288,17 +288,14 @@ export const resendInvitation = async (req, res) => {
   }
 };
 
-// Cancel invitation
+// Cancel invitation (POST /invitations/:id/cancel — keeps record, marks CANCELLED)
 export const cancelInvitation = async (req, res) => {
   try {
     const { invitationId } = req.params;
     const userId = req.user.id;
 
     const invitation = await prisma.invitation.findFirst({
-      where: {
-        id: invitationId,
-        senderId: userId,
-      },
+      where: { id: invitationId, senderId: userId },
     });
 
     if (!invitation) {
@@ -306,14 +303,14 @@ export const cancelInvitation = async (req, res) => {
     }
 
     if (invitation.status !== 'PENDING') {
-      return res.status(400).json({ 
-        error: `Cannot cancel ${invitation.status.toLowerCase()} invitation` 
+      return res.status(400).json({
+        error: `Cannot cancel ${invitation.status.toLowerCase()} invitation`,
       });
     }
 
     await prisma.invitation.update({
       where: { id: invitationId },
-      data: { status: 'EXPIRED' },
+      data: { status: 'CANCELLED' },
     });
 
     res.json({ message: 'Invitation cancelled successfully' });

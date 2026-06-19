@@ -1,25 +1,27 @@
-import React, { useState, useEffect } from 'react'
-import { X, Wallet, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft, QrCode } from 'lucide-react'
+import React, { useState, useEffect, useRef } from 'react'
+import { X, Wallet, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft } from 'lucide-react'
 import { walletAPI } from '../services/api'
 
 function WalletModal({ onClose, user }) {
   const [balance, setBalance] = useState(0)
   const [transactions, setTransactions] = useState([])
-  const [activeTab, setActiveTab] = useState('overview') // 'overview', 'deposit', 'withdraw'
-  const [paymentMethod, setPaymentMethod] = useState('card') // 'card', 'lightning'
+  const [activeTab, setActiveTab] = useState('overview')
+  const [paymentMethod, setPaymentMethod] = useState('card')
   const [amount, setAmount] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState('')
-  
-  // Lightning specific states
   const [lightningInvoice, setLightningInvoice] = useState(null)
   const [invoiceCopied, setInvoiceCopied] = useState(false)
   const [checkingInvoice, setCheckingInvoice] = useState(false)
-  
-  // Withdrawal states
-  const [withdrawMethod, setWithdrawMethod] = useState('bank') // 'bank', 'lightning'
+  const [withdrawMethod, setWithdrawMethod] = useState('bank')
   const [lightningAddress, setLightningAddress] = useState('')
+  const mountedRef = useRef(true)
+
+  useEffect(() => {
+    mountedRef.current = true
+    return () => { mountedRef.current = false }
+  }, [])
 
   useEffect(() => {
     loadWalletData()
@@ -56,15 +58,11 @@ function WalletModal({ onClose, user }) {
         walletAPI.getBalance(),
         walletAPI.getTransactions()
       ])
-      
-      if (balanceRes.walletBalance !== undefined) {
-        setBalance(balanceRes.walletBalance)
-      }
-      
-      if (transactionsRes.transactions) {
-        setTransactions(transactionsRes.transactions)
-      }
+      if (!mountedRef.current) return
+      if (balanceRes.walletBalance !== undefined) setBalance(balanceRes.walletBalance)
+      if (transactionsRes.transactions) setTransactions(transactionsRes.transactions)
     } catch (err) {
+      if (!mountedRef.current) return
       console.error('Failed to load wallet data:', err)
       setError('Failed to load wallet data')
     }
@@ -213,6 +211,7 @@ function WalletModal({ onClose, user }) {
                   setActiveTab('overview')
                   setError('')
                   setSuccess('')
+                  setAmount('')
                   setLightningInvoice(null)
                   setCheckingInvoice(false)
                 }}
@@ -257,14 +256,24 @@ function WalletModal({ onClose, user }) {
                 </div>
                 <div className="flex gap-2">
                   <button
-                    onClick={() => setActiveTab('deposit')}
+                    onClick={() => {
+                      setActiveTab('deposit')
+                      setAmount('')
+                      setError('')
+                      setSuccess('')
+                    }}
                     className="flex items-center gap-2 bg-white text-blue-600 px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-50 transition-colors"
                   >
                     <Plus className="w-4 h-4" />
                     Add Funds
                   </button>
                   <button
-                    onClick={() => setActiveTab('withdraw')}
+                    onClick={() => {
+                      setActiveTab('withdraw')
+                      setAmount('')
+                      setError('')
+                      setSuccess('')
+                    }}
                     className="flex items-center gap-2 bg-white bg-opacity-20 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-opacity-30 transition-colors"
                   >
                     <ArrowUpRight className="w-4 h-4" />

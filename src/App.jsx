@@ -7,6 +7,7 @@ import KnoccRequestModal from './components/KnoccRequestModal'
 import SettingsModal from './components/SettingsModal'
 import WalletModal from './components/WalletModal'
 import LoginPage from './components/LoginPage'
+import InviteFriendsModal from './components/InviteFriendsModal'
 import { authAPI, emailAPI, knoccAPI, userAPI } from './services/api'
 
 function App() {
@@ -29,6 +30,7 @@ function App() {
   const [showKnoccRequest, setShowKnoccRequest] = useState(false)
   const [showSettings, setShowSettings] = useState(false)
   const [showWallet, setShowWallet] = useState(false)
+  const [showInvite, setShowInvite] = useState(false)
   const [currentView, setCurrentView] = useState('inbox')
   const [inboxView, setInboxView] = useState('inbox')
   const [knoccFilter, setKnoccFilter] = useState('all')
@@ -65,8 +67,10 @@ function App() {
   useEffect(() => {
     if (isAuthenticated) {
       loadData()
-      // Always keep draft count fresh
-      emailAPI.getDrafts().then((r) => setDraftEmails(r.drafts || [])).catch(() => {})
+      // Keep draft badge count fresh on every view change (except drafts view — loadData handles that)
+      if (currentView !== 'drafts') {
+        emailAPI.getDrafts().then((r) => setDraftEmails(r.drafts || [])).catch(() => {})
+      }
     }
   }, [isAuthenticated, currentView, inboxView, knoccFilter])
 
@@ -306,6 +310,10 @@ function App() {
             setUser(updatedUser)
             localStorage.setItem('user', JSON.stringify(updatedUser))
           }}
+          onShowInvite={() => {
+            setShowSettings(false)
+            setShowInvite(true)
+          }}
         />
       )}
 
@@ -313,6 +321,12 @@ function App() {
         <WalletModal 
           onClose={() => setShowWallet(false)}
           user={user}
+        />
+      )}
+
+      {showInvite && (
+        <InviteFriendsModal
+          onClose={() => setShowInvite(false)}
         />
       )}
     </div>

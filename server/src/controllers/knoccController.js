@@ -40,16 +40,15 @@ export const sendKnoccRequest = async (req, res) => {
       return res.status(403).json({ error: 'Cannot send request to this user' });
     }
 
-    // Check wallet balance
-    if (req.user.walletBalance < paymentAmount) {
-      return res.status(400).json({ error: 'Insufficient wallet balance' });
-    }
-
-    // Deduct from sender's wallet
-    await prisma.user.update({
-      where: { id: senderId },
+    // Atomic wallet debit — prevents race condition double-spend
+    const updatedSender = await prisma.user.updateMany({
+      where: { id: senderId, walletBalance: { gte: paymentAmount } },
       data: { walletBalance: { decrement: paymentAmount } },
     });
+
+    if (updatedSender.count === 0) {
+      return res.status(400).json({ error: 'Insufficient wallet balance' });
+    }
 
     // Create transaction
     await prisma.transaction.create({
@@ -173,12 +172,13 @@ export const respondToRequest = async (req, res) => {
         },
       });
 
-      // Add to contacts (bidirectional)
+      // Add to contacts bidirectionally — skip if already exists
       await prisma.contact.createMany({
         data: [
           { userId, contactId: request.senderId },
           { userId: request.senderId, contactId: userId },
         ],
+        skipDuplicates: true,
       });
 
       // Add payment to recipient's wallet
@@ -199,31 +199,25 @@ export const respondToRequest = async (req, res) => {
 
       res.json({ message: 'Request approved successfully' });
     } else if (action === 'decline') {
-      // Update request status
-      await prisma.knoccRequest.update({
-        where: { id },
-        data: {
-          status: 'DECLINED',
-          respondedAt: new Date(),
-        },
-      });
-
-      // Refund sender
-      await prisma.user.update({
-        where: { id: request.senderId },
-        data: { walletBalance: { increment: request.paymentAmount } },
-      });
-
-      // Create transaction
-      await prisma.transaction.create({
-        data: {
-          userId: request.senderId,
-          type: 'REFUND',
-          amount: request.paymentAmount,
-          description: `Knocc request declined - refund`,
-        },
-      });
-
+      // Atomic: update status + refund in a single transaction
+      await prisma.$transaction([
+        prisma.knoccRequest.update({
+          where: { id },
+          data: { status: 'DECLINED', respondedAt: new Date() },
+        }),
+        prisma.user.update({
+          where: { id: request.senderId },
+          data: { walletBalance: { increment: request.paymentAmount } },
+        }),
+        prisma.transaction.create({
+          data: {
+            userId: request.senderId,
+            type: 'REFUND',
+            amount: request.paymentAmount,
+            description: 'Knocc request declined - refund',
+          },
+        }),
+      ]);
       res.json({ message: 'Request declined successfully' });
     } else {
       res.status(400).json({ error: 'Invalid action' });

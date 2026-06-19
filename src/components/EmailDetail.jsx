@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download } from 'lucide-react'
+import DOMPurify from 'dompurify'
 import { knoccAPI, userAPI, emailAPI } from '../services/api'
 
 // Instagram/Twitter-style verification badge
@@ -45,6 +46,8 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
     }
   }
 
+  const [actionError, setActionError] = useState('')
+
   const handleKnoccClick = (person) => {
     setSelectedPerson(person)
     setShowKnoccModal(true)
@@ -52,23 +55,22 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
 
   const handleSendKnocc = async () => {
     if (!knoccReason.trim()) {
-      alert('Please provide a reason')
+      setActionError('Please provide a reason')
       return
     }
-    
+    setActionError('')
     setLoading(true)
     try {
       await knoccAPI.sendRequest({
         recipientEmail: selectedPerson.email,
         reason: knoccReason,
         message: '',
-        paymentAmount: selectedPerson.knoccPrice
+        paymentAmount: selectedPerson.knoccPrice,
       })
       setShowKnoccModal(false)
       setKnoccReason('')
-      alert('Knocc request sent successfully!')
     } catch (err) {
-      alert(err.message || 'Failed to send Knocc request')
+      setActionError(err.message || 'Failed to send Knocc request')
     } finally {
       setLoading(false)
     }
@@ -76,13 +78,14 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
 
   const handleApproveRequest = async () => {
     if (!email) return
+    setActionError('')
     setLoading(true)
     try {
       await knoccAPI.respondToRequest(email.id, 'approve')
       onClose()
       if (onRefresh) onRefresh()
     } catch (err) {
-      alert(err.message || 'Failed to approve request')
+      setActionError(err.message || 'Failed to approve request')
     } finally {
       setLoading(false)
     }
@@ -90,13 +93,14 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
 
   const handleDeclineRequest = async () => {
     if (!email) return
+    setActionError('')
     setLoading(true)
     try {
       await knoccAPI.respondToRequest(email.id, 'decline')
       onClose()
       if (onRefresh) onRefresh()
     } catch (err) {
-      alert(err.message || 'Failed to decline request')
+      setActionError(err.message || 'Failed to decline request')
     } finally {
       setLoading(false)
     }
@@ -110,7 +114,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
       onClose()
       if (onRefresh) onRefresh()
     } catch (err) {
-      alert(err.message || 'Failed to delete email')
+      setActionError(err.message || 'Failed to delete email')
     } finally {
       setLoading(false)
     }
@@ -333,28 +337,39 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
       await emailAPI.starEmail(email.id)
       if (onRefresh) onRefresh()
     } catch (err) {
-      alert(err.message || 'Failed to star email')
+      setActionError(err.message || 'Failed to star email')
     } finally {
       setLoading(false)
     }
   }
 
   // Build reply/forward context objects
-  const buildReplyContext = () => ({
-    senderEmail: email.sender?.email || email.email || '',
-    senderName: email.sender?.name || email.sender || '',
-    subject: email.subject || '',
-    body: email.body || '',
-    date: email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
-  })
+  const buildReplyContext = () => {
+    // email.sender is an object { id, name, email } from the API
+    const senderEmail = email.sender?.email || ''
+    const senderName  = email.sender?.name  || senderEmail || 'Unknown'
+    return {
+      senderId:    email.sender?.id   || '',
+      senderEmail,
+      senderName,
+      subject:     email.subject      || '',
+      body:        email.body         || '',
+      date:        email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
+    }
+  }
 
-  const buildForwardContext = () => ({
-    senderEmail: email.sender?.email || email.email || '',
-    senderName: email.sender?.name || email.sender || '',
-    subject: email.subject || '',
-    body: email.body || '',
-    date: email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
-  })
+  const buildForwardContext = () => {
+    const senderEmail = email.sender?.email || ''
+    const senderName  = email.sender?.name  || senderEmail || 'Unknown'
+    return {
+      senderId:    email.sender?.id   || '',
+      senderEmail,
+      senderName,
+      subject:     email.subject      || '',
+      body:        email.body         || '',
+      date:        email.sentAt ? new Date(email.sentAt).toLocaleString() : '',
+    }
+  }
 
   const formatBytes = (bytes) => {
     if (!bytes) return ''
@@ -412,11 +427,27 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
 
       {/* Email Body */}
       <div className="flex-1 p-5 overflow-y-auto">
+        {actionError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-start gap-2">
+            <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+            <span>{actionError}</span>
+          </div>
+        )}
         <div className="max-w-2xl">
-          {/* Render HTML body safely */}
+          {/* Render HTML body safely — sanitized against XSS */}
           <div
             className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
-            dangerouslySetInnerHTML={{ __html: email.body || email.preview || '(No content)' }}
+            dangerouslySetInnerHTML={{
+              __html: DOMPurify.sanitize(email.body || email.preview || '(No content)', {
+                ALLOWED_TAGS: ['p','br','strong','b','em','i','u','s','a','ul','ol','li',
+                               'h1','h2','h3','h4','blockquote','pre','code','table',
+                               'thead','tbody','tr','th','td','img','hr','div','span'],
+                ALLOWED_ATTR: ['href','src','alt','style','class','target','rel',
+                               'colspan','rowspan','width','height','align','border',
+                               'cellpadding','cellspacing'],
+                ALLOW_DATA_ATTR: false,
+              })
+            }}
           />
 
           {/* Attachments */}

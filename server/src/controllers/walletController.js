@@ -1,149 +1,103 @@
 import prisma from '../utils/prisma.js';
 import axios from 'axios';
 
-// Polar Lightning Network configuration
 const POLAR_API_URL = process.env.POLAR_API_URL || 'http://localhost:8081';
 const POLAR_MACAROON = process.env.POLAR_MACAROON || '';
 
-// Lightning Network helper functions
-const createLNInvoice = async (amountSats, description) => {
+// Fetch live BTC price with a 5-minute cache
+let btcPriceCache = { price: 60000, fetchedAt: 0 };
+const getBtcPrice = async () => {
+  const now = Date.now();
+  if (now - btcPriceCache.fetchedAt < 5 * 60 * 1000) return btcPriceCache.price;
   try {
-    const response = await axios.post(
-      `${POLAR_API_URL}/v1/invoices`,
-      {
-        value: amountSats.toString(),
-        memo: description,
-        expiry: '3600', // 1 hour
-      },
-      {
-        headers: {
-          'Grpc-Metadata-macaroon': POLAR_MACAROON,
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Lightning invoice creation error:', error);
-    throw new Error('Failed to create Lightning invoice');
-  }
+    const r = await axios.get('https://api.coinbase.com/v2/prices/BTC-USD/spot', { timeout: 3000 });
+    const price = parseFloat(r.data?.data?.amount);
+    if (price > 0) { btcPriceCache = { price, fetchedAt: now }; return price; }
+  } catch { /* use cached */ }
+  return btcPriceCache.price;
+};
+
+const usdToSats = async (usd) => {
+  const btcPrice = await getBtcPrice();
+  return Math.floor((usd / btcPrice) * 1e8);
+};
+const satsToUsd = async (sats) => {
+  const btcPrice = await getBtcPrice();
+  return (sats / 1e8) * btcPrice;
+};
+
+const lnHeaders = () => ({ 'Grpc-Metadata-macaroon': POLAR_MACAROON });
+
+const createLNInvoice = async (amountSats, description) => {
+  const r = await axios.post(`${POLAR_API_URL}/v1/invoices`,
+    { value: amountSats.toString(), memo: description, expiry: '3600' },
+    { headers: lnHeaders() });
+  return r.data;
 };
 
 const checkLNInvoice = async (paymentHash) => {
-  try {
-    const response = await axios.get(
-      `${POLAR_API_URL}/v1/invoice/${paymentHash}`,
-      {
-        headers: {
-          'Grpc-Metadata-macaroon': POLAR_MACAROON,
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Lightning invoice check error:', error);
-    throw new Error('Failed to check Lightning invoice');
-  }
+  // paymentHash may arrive as base64 — encode for URL
+  const encoded = encodeURIComponent(paymentHash);
+  const r = await axios.get(`${POLAR_API_URL}/v1/invoice/${encoded}`, { headers: lnHeaders() });
+  return r.data;
 };
 
 const sendLNPayment = async (paymentRequest) => {
-  try {
-    const response = await axios.post(
-      `${POLAR_API_URL}/v1/channels/transactions`,
-      {
-        payment_request: paymentRequest,
-      },
-      {
-        headers: {
-          'Grpc-Metadata-macaroon': POLAR_MACAROON,
-        },
-      }
-    );
-    return response.data;
-  } catch (error) {
-    console.error('Lightning payment error:', error);
-    throw new Error('Failed to send Lightning payment');
-  }
+  const r = await axios.post(`${POLAR_API_URL}/v1/channels/transactions`,
+    { payment_request: paymentRequest },
+    { headers: lnHeaders() });
+  return r.data;
 };
 
-// Convert USD to Satoshis (assuming 1 BTC = $40,000)
-const usdToSats = (usd) => {
-  const BTC_PRICE = 40000; // You should fetch this from an API
-  const btc = usd / BTC_PRICE;
-  return Math.floor(btc * 100000000); // Convert to satoshis
-};
-
-const satsToUsd = (sats) => {
-  const BTC_PRICE = 40000;
-  const btc = sats / 100000000;
-  return btc * BTC_PRICE;
+// Validate a numeric amount from request body
+const parseAmount = (raw) => {
+  const n = parseFloat(raw);
+  if (!isFinite(n) || n <= 0) return null;
+  return n;
 };
 
 export const addFunds = async (req, res) => {
   try {
-    const { amount } = req.body;
+    const amount = parseAmount(req.body.amount);
+    if (!amount) return res.status(400).json({ error: 'Amount must be a positive number' });
     const userId = req.user.id;
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
-    }
-
-    // Update wallet balance
     const user = await prisma.user.update({
       where: { id: userId },
-      data: {
-        walletBalance: { increment: parseFloat(amount) },
-      },
-      select: {
-        walletBalance: true,
-      },
+      data: { walletBalance: { increment: amount } },
+      select: { walletBalance: true },
     });
 
-    // Create transaction
     await prisma.transaction.create({
-      data: {
-        userId,
-        type: 'DEPOSIT',
-        amount: parseFloat(amount),
-        description: 'Wallet funds added via card',
-      },
+      data: { userId, type: 'DEPOSIT', amount, description: 'Funds added via card' },
     });
 
-    res.json({
-      message: 'Funds added successfully',
-      walletBalance: user.walletBalance,
-    });
-  } catch (error) {
-    console.error('Add funds error:', error);
+    res.json({ message: 'Funds added successfully', walletBalance: user.walletBalance });
+  } catch (err) {
+    console.error('Add funds error:', err);
     res.status(500).json({ error: 'Failed to add funds' });
   }
 };
 
 export const createLightningInvoice = async (req, res) => {
   try {
-    const { amount } = req.body;
-    const userId = req.user.id;
+    const amount = parseAmount(req.body.amount);
+    if (!amount) return res.status(400).json({ error: 'Amount must be a positive number' });
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
-    }
-
-    const amountSats = usdToSats(parseFloat(amount));
-    const description = `Add $${amount} to Pmail wallet`;
-
-    // Create Lightning invoice
-    const invoice = await createLNInvoice(amountSats, description);
+    const amountSats = await usdToSats(amount);
+    const invoice = await createLNInvoice(amountSats, `Add $${amount} to Pmail wallet`);
 
     res.json({
       invoice: {
         paymentRequest: invoice.payment_request,
         paymentHash: invoice.r_hash,
         amountSats,
-        amountUsd: parseFloat(amount),
+        amountUsd: amount,
         expiresAt: new Date(Date.now() + 3600 * 1000).toISOString(),
       },
     });
-  } catch (error) {
-    console.error('Create invoice error:', error);
+  } catch (err) {
+    console.error('Create invoice error:', err);
     res.status(500).json({ error: 'Failed to create Lightning invoice' });
   }
 };
@@ -152,134 +106,106 @@ export const checkInvoiceStatus = async (req, res) => {
   try {
     const { invoiceId } = req.params;
     const userId = req.user.id;
-
-    // Check Lightning invoice status
     const invoice = await checkLNInvoice(invoiceId);
 
-    if (invoice.settled) {
-      const amountUsd = satsToUsd(parseInt(invoice.value));
+    if (!invoice.settled) return res.json({ settled: false });
 
-      // Update wallet balance
-      const user = await prisma.user.update({
-        where: { id: userId },
-        data: {
-          walletBalance: { increment: amountUsd },
-        },
-        select: {
-          walletBalance: true,
-        },
-      });
-
-      // Create transaction
-      await prisma.transaction.create({
-        data: {
-          userId,
-          type: 'DEPOSIT',
-          amount: amountUsd,
-          description: `Lightning deposit: ${invoice.value} sats`,
-        },
-      });
-
-      res.json({
-        settled: true,
-        walletBalance: user.walletBalance,
-      });
-    } else {
-      res.json({
-        settled: false,
-      });
+    // Idempotency: check if we already credited this payment
+    const txnDescription = `Lightning deposit: ${invoice.value} sats`;
+    const existing = await prisma.transaction.findFirst({
+      where: { userId, description: txnDescription, type: 'DEPOSIT' },
+    });
+    if (existing) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+      return res.json({ settled: true, walletBalance: user.walletBalance, alreadyCredited: true });
     }
-  } catch (error) {
-    console.error('Check invoice status error:', error);
+
+    const amountUsd = await satsToUsd(parseInt(invoice.value));
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { walletBalance: { increment: amountUsd } },
+      select: { walletBalance: true },
+    });
+
+    await prisma.transaction.create({
+      data: { userId, type: 'DEPOSIT', amount: amountUsd, description: txnDescription },
+    });
+
+    res.json({ settled: true, walletBalance: user.walletBalance });
+  } catch (err) {
+    console.error('Check invoice status error:', err);
     res.status(500).json({ error: 'Failed to check invoice status' });
   }
 };
 
 export const withdrawFunds = async (req, res) => {
   try {
-    const { amount, paymentRequest } = req.body;
+    const amount = parseAmount(req.body.amount);
+    if (!amount) return res.status(400).json({ error: 'Amount must be a positive number' });
+    const { paymentRequest } = req.body;
     const userId = req.user.id;
 
-    if (!amount || amount <= 0) {
-      return res.status(400).json({ error: 'Invalid amount' });
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+    if (user.walletBalance < amount) return res.status(400).json({ error: 'Insufficient balance' });
+
+    // Validate Lightning invoice format (starts with lnbc/lntb/lnbcrt)
+    if (paymentRequest && !/^ln[a-z]{2,6}[0-9]/i.test(paymentRequest)) {
+      return res.status(400).json({ error: 'Invalid Lightning invoice format' });
     }
 
-    const user = await prisma.user.findUnique({
+    if (paymentRequest) await sendLNPayment(paymentRequest);
+
+    const updated = await prisma.user.update({
       where: { id: userId },
+      data: { walletBalance: { decrement: amount } },
       select: { walletBalance: true },
     });
 
-    if (user.walletBalance < parseFloat(amount)) {
-      return res.status(400).json({ error: 'Insufficient balance' });
-    }
-
-    // Send Lightning payment if payment request provided
-    if (paymentRequest) {
-      await sendLNPayment(paymentRequest);
-    }
-
-    // Deduct from wallet balance
-    const updatedUser = await prisma.user.update({
-      where: { id: userId },
-      data: {
-        walletBalance: { decrement: parseFloat(amount) },
-      },
-      select: {
-        walletBalance: true,
-      },
-    });
-
-    // Create transaction
     await prisma.transaction.create({
       data: {
-        userId,
-        type: 'WITHDRAWAL',
-        amount: -parseFloat(amount),
-        description: paymentRequest
-          ? 'Lightning withdrawal'
-          : 'Withdrawal to bank account',
+        userId, type: 'WITHDRAWAL', amount: -amount,
+        description: paymentRequest ? 'Lightning withdrawal' : 'Withdrawal to bank account',
       },
     });
 
-    res.json({
-      message: 'Withdrawal successful',
-      walletBalance: updatedUser.walletBalance,
-    });
-  } catch (error) {
-    console.error('Withdraw funds error:', error);
+    res.json({ message: 'Withdrawal successful', walletBalance: updated.walletBalance });
+  } catch (err) {
+    console.error('Withdraw funds error:', err);
     res.status(500).json({ error: 'Failed to withdraw funds' });
   }
 };
 
 export const getBalance = async (req, res) => {
   try {
-    const userId = req.user.id;
-
     const user = await prisma.user.findUnique({
-      where: { id: userId },
+      where: { id: req.user.id },
       select: { walletBalance: true },
     });
-
     res.json({ walletBalance: user.walletBalance });
-  } catch (error) {
-    console.error('Get balance error:', error);
+  } catch (err) {
+    console.error('Get balance error:', err);
     res.status(500).json({ error: 'Failed to get balance' });
   }
 };
 
 export const getTransactions = async (req, res) => {
   try {
-    const userId = req.user.id;
+    const page  = Math.max(1, parseInt(req.query.page)  || 1);
+    const limit = Math.min(100, parseInt(req.query.limit) || 50);
+    const skip  = (page - 1) * limit;
 
-    const transactions = await prisma.transaction.findMany({
-      where: { userId },
-      orderBy: { createdAt: 'desc' },
-      take: 50,
-    });
+    const [transactions, total] = await Promise.all([
+      prisma.transaction.findMany({
+        where: { userId: req.user.id },
+        orderBy: { createdAt: 'desc' },
+        skip, take: limit,
+      }),
+      prisma.transaction.count({ where: { userId: req.user.id } }),
+    ]);
 
-    res.json({ transactions });
-  } catch (error) {
-    console.error('Get transactions error:', error);
+    res.json({ transactions, pagination: { page, limit, total, pages: Math.ceil(total / limit) } });
+  } catch (err) {
+    console.error('Get transactions error:', err);
     res.status(500).json({ error: 'Failed to get transactions' });
   }
 };

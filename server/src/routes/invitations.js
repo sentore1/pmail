@@ -26,10 +26,10 @@ router.get('/', getSentInvitations);
 // Get invitation statistics
 router.get('/stats', getInvitationStats);
 
+// Cancel invitation
+router.post('/:invitationId/cancel', cancelInvitation);
+
 // Resend invitation
 router.post('/:invitationId/resend', resendInvitation);
-
-// Cancel invitation
-router.delete('/:invitationId', cancelInvitation);
 
 export default router;

@@ -4,7 +4,7 @@ import {
   Link as LinkIcon, Image, Paperclip, Smile, AlignLeft, AlignCenter, AlignRight,
   List, ListOrdered, RotateCcw, RotateCw, Type, Sparkles, FileText, Table, Code,
   Calendar, Clock, MapPin, Phone, Mail as MailIcon, Hash, AtSign, MessageCircle,
-  Save, Reply, Forward,
+  Reply, Forward,
 } from 'lucide-react'
 import { emailAPI, knoccAPI, userAPI } from '../services/api'
 
@@ -17,7 +17,8 @@ const EMOJIS = [
 
 function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }) {
   // ── Fields ────────────────────────────────────────────────────────────────
-  const [recipient, setRecipient] = useState('')
+  const [recipients, setRecipients] = useState([]) // [{email, name, approved, knoccPrice}]
+  const [recipientInput, setRecipientInput] = useState('')
   const [cc, setCc] = useState('')
   const [bcc, setBcc] = useState('')
   const [showCc, setShowCc] = useState(false)
@@ -31,6 +32,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
   const [showBccSuggestions, setShowBccSuggestions] = useState(false)
   const [selectedContact, setSelectedContact] = useState(null)
   const [allContacts, setAllContacts] = useState([])
+  const recipientInputRef = useRef(null)
 
   // ── Knocc ─────────────────────────────────────────────────────────────────
   const [showKnoccPayment, setShowKnoccPayment] = useState(false)
@@ -75,11 +77,16 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     setDraftId(draft.id)
 
     // Restore To/CC/BCC from recipient rows
-    const toList = draft.recipients?.filter((r) => r.type === 'TO').map((r) => r.recipient?.email || '').filter(Boolean)
+    const toList = draft.recipients?.filter((r) => r.type === 'TO').map((r) => ({
+      email: r.recipient?.email || '',
+      name: r.recipient?.name || r.recipient?.email || '',
+      approved: r.recipient?.isContact || false,
+      knoccPrice: r.recipient?.knoccPrice || 0,
+    })).filter(r => r.email)
     const ccList = draft.recipients?.filter((r) => r.type === 'CC').map((r) => r.recipient?.email || '').filter(Boolean)
     const bccList = draft.recipients?.filter((r) => r.type === 'BCC').map((r) => r.recipient?.email || '').filter(Boolean)
 
-    if (toList?.length) setRecipient(toList[0]) // compose only supports one To at a time in the UI
+    if (toList?.length) setRecipients(toList)
     if (ccList?.length) { setCc(ccList.join(', ')); setShowCc(true) }
     if (bccList?.length) { setBcc(bccList.join(', ')); setShowBcc(true) }
 
@@ -108,7 +115,16 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
   // ── Pre-populate for reply / forward ─────────────────────────────────────
   useEffect(() => {
     if (replyTo) {
-      setRecipient(replyTo.senderEmail || '')
+      // The person we're replying to is already on Pmail (we got their email),
+      // so mark them as approved — no Knocc payment needed
+      if (replyTo.senderEmail) {
+        setRecipients([{
+          email:      replyTo.senderEmail,
+          name:       replyTo.senderName || replyTo.senderEmail,
+          approved:   true,   // they're on Pmail — we received from them
+          knoccPrice: 0,
+        }])
+      }
       setSubject(replyTo.subject?.startsWith('Re:') ? replyTo.subject : `Re: ${replyTo.subject || ''}`)
       const quoted = `<br/><br/><blockquote style="border-left:3px solid #d1d5db;padding-left:12px;color:#6b7280;margin:0">`
         + `<p style="margin:0 0 4px;font-size:12px;color:#9ca3af">On ${replyTo.date || ''}, ${replyTo.senderName || replyTo.senderEmail} wrote:</p>`
@@ -137,16 +153,14 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     }
   }, [replyTo, forwardOf])
 
-  // ── Load contacts on mount ────────────────────────────────────────────────
+  // ── Load contacts on mount + search live as user types ──────────────────
   useEffect(() => {
     const fetchContacts = async () => {
       try {
-        const [contactsRes, approvedRes] = await Promise.all([
-          userAPI.searchUsers(''),
-          userAPI.getContacts(),
-        ])
-        if (contactsRes.users) {
-          setAllContacts(contactsRes.users.map((u) => ({ ...u, approved: u.isContact })))
+        // Load the user's approved contacts first (always available)
+        const approvedRes = await userAPI.getContacts()
+        if (approvedRes.contacts) {
+          setAllContacts(approvedRes.contacts.map(u => ({ ...u, approved: true, isContact: true })))
         }
       } catch (err) {
         console.error('Failed to load contacts:', err)
@@ -155,20 +169,50 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     fetchContacts()
   }, [])
 
+  // Live search as recipient input changes (min 1 char, hits the server)
+  useEffect(() => {
+    if (!recipientInput || recipientInput.length < 1) return
+    const timer = setTimeout(async () => {
+      try {
+        const res = await userAPI.searchUsers(recipientInput)
+        if (res.users) {
+          // Merge with existing contacts, de-dupe by id
+          setAllContacts(prev => {
+            const map = new Map(prev.map(c => [c.id, c]))
+            res.users.forEach(u => {
+              if (!map.has(u.id)) map.set(u.id, { ...u, approved: u.isContact })
+              else map.set(u.id, { ...map.get(u.id), ...u, approved: u.isContact })
+            })
+            return Array.from(map.values())
+          })
+        }
+      } catch { /* silent */ }
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [recipientInput])
+
   // ── Auto-save draft every 30 s if there's content ────────────────────────
   useEffect(() => {
     autoSaveTimer.current = setInterval(() => {
       if (subject || message) handleSaveDraft(true)
     }, 30000)
     return () => clearInterval(autoSaveTimer.current)
-  }, [subject, message, recipient, cc, bcc, attachments, draftId])
+  }, [subject, message, recipients, cc, bcc, attachments, draftId])
+
+  // ── Auto-save on close/minimize ──────────────────────────────────────────
+  const handleAutoSaveBeforeAction = useCallback(async (callback) => {
+    if (subject || message) {
+      await handleSaveDraft(true)
+    }
+    callback()
+  }, [subject, message, recipients, cc, bcc, attachments, draftId])
 
   // ── Filtered suggestions ──────────────────────────────────────────────────
   const filteredContacts = allContacts.filter(
-    (c) => recipient && (
-      c.name.toLowerCase().includes(recipient.toLowerCase()) ||
-      c.email.toLowerCase().includes(recipient.toLowerCase())
-    )
+    (c) => recipientInput.length >= 1 && (
+      c.name?.toLowerCase().includes(recipientInput.toLowerCase()) ||
+      c.email?.toLowerCase().includes(recipientInput.toLowerCase())
+    ) && !recipients.some(r => r.email === c.email)
   )
   const filteredCcContacts = allContacts.filter(
     (c) => cc && (
@@ -220,12 +264,33 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
 
   // ── Insert helpers ────────────────────────────────────────────────────────
   const handleInsertLink = () => {
-    const url = prompt('Enter URL:')
-    if (url) applyFormat('createLink', url)
+    const url = window.prompt('Enter URL:')
+    if (url?.trim()) applyFormat('createLink', url.trim())
   }
   const handleInsertImage = () => {
-    const url = prompt('Enter image URL:')
-    if (url) applyFormat('insertImage', url)
+    const url = window.prompt('Enter image URL:')
+    if (url?.trim()) applyFormat('insertImage', url.trim())
+  }
+  const handleInsertTable = () => {
+    const rows = parseInt(window.prompt('Number of rows:', '3') || '3', 10)
+    const cols = parseInt(window.prompt('Number of columns:', '3') || '3', 10)
+    if (rows > 0 && cols > 0) {
+      let html = '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse">'
+      for (let i = 0; i < rows; i++) {
+        html += '<tr>' + '<td>[Cell]</td>'.repeat(cols) + '</tr>'
+      }
+      html += '</table><p></p>'
+      document.execCommand('insertHTML', false, html)
+      messageRef.current?.focus()
+    }
+  }
+  const handleInsertHR = () => { applyFormat('insertHorizontalRule') }
+  const handleInsertCodeBlock = () => {
+    const code = window.prompt('Enter code:')
+    if (code) {
+      document.execCommand('insertHTML', false,
+        `<pre style="background:#f4f4f4;padding:10px;border-radius:4px;overflow-x:auto"><code>${code}</code></pre><p></p>`)
+    }
   }
   const handleInsertEmoji = (emoji) => {
     if (messageRef.current) {
@@ -235,40 +300,21 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     }
     setShowEmojiPicker(false)
   }
-  const handleInsertTable = () => {
-    const rows = prompt('Number of rows:', '3')
-    const cols = prompt('Number of columns:', '3')
-    if (rows && cols) {
-      let html = '<table border="1" cellpadding="8" cellspacing="0" style="border-collapse:collapse">'
-      for (let i = 0; i < parseInt(rows); i++) {
-        html += '<tr>' + '<td>[Cell]</td>'.repeat(parseInt(cols)) + '</tr>'
-      }
-      html += '</table><p></p>'
-      document.execCommand('insertHTML', false, html)
-      messageRef.current?.focus()
-    }
-  }
-  const handleInsertHR = () => { applyFormat('insertHorizontalRule') }
-  const handleInsertCodeBlock = () => {
-    const code = prompt('Enter code:')
-    if (code) {
-      document.execCommand('insertHTML', false,
-        `<pre style="background:#f4f4f4;padding:10px;border-radius:4px;overflow-x:auto"><code>${code}</code></pre><p></p>`)
-    }
-  }
 
   // ── Draft save ────────────────────────────────────────────────────────────
   const handleSaveDraft = async (silent = false) => {
     if (!subject && !message) return
     try {
+      // Skip server-side attachments (already stored) to avoid re-uploading large base64 blobs
+      const uploadableAttachments = attachments.filter((a) => a.data && !a._serverSide)
       const payload = {
         ...(draftId && { id: draftId }),
-        to: recipient ? [recipient] : [],
+        to: recipients.map(r => r.email),
         cc: cc ? cc.split(',').map((e) => e.trim()).filter(Boolean) : [],
         bcc: bcc ? bcc.split(',').map((e) => e.trim()).filter(Boolean) : [],
         subject,
         body: message,
-        attachments,
+        attachments: uploadableAttachments,
       }
       const res = draftId
         ? await emailAPI.updateDraft(payload)
@@ -285,16 +331,54 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
   }
 
   // ── Recipient change handlers ─────────────────────────────────────────────
-  const handleRecipientChange = (e) => {
-    setRecipient(e.target.value)
-    setShowSuggestions(e.target.value.length > 0)
-    setSelectedContact(null)
+  const handleRecipientInputChange = (e) => {
+    const value = e.target.value
+    setRecipientInput(value)
+    setShowSuggestions(value.length >= 1)
   }
-  const handleSelectContact = (contact) => {
-    setRecipient(contact.email)
-    setSelectedContact(contact)
+  
+  const handleAddRecipient = (contact) => {
+    setRecipients(prev => [...prev, {
+      email: contact.email,
+      name: contact.name,
+      approved: contact.approved || contact.isContact,
+      knoccPrice: contact.knoccPrice || 0,
+    }])
+    setRecipientInput('')
     setShowSuggestions(false)
+    setTimeout(() => recipientInputRef.current?.focus(), 0)
   }
+  
+  const handleRemoveRecipient = (email) => {
+    setRecipients(prev => prev.filter(r => r.email !== email))
+  }
+  
+  const handleRecipientKeyDown = (e) => {
+    if (e.key === 'Enter' && recipientInput.trim()) {
+      e.preventDefault()
+      // Try to match an existing contact
+      const match = allContacts.find(c => 
+        c.email.toLowerCase() === recipientInput.toLowerCase().trim()
+      )
+      if (match) {
+        handleAddRecipient(match)
+      } else {
+        // Add as new email (not on platform)
+        setRecipients(prev => [...prev, {
+          email: recipientInput.trim(),
+          name: recipientInput.trim(),
+          approved: false,
+          knoccPrice: 0,
+        }])
+        setRecipientInput('')
+      }
+    } else if (e.key === 'Backspace' && !recipientInput && recipients.length > 0) {
+      // Remove last recipient on backspace
+      setRecipients(prev => prev.slice(0, -1))
+    }
+  }
+  
+  const handleSelectContact = (contact) => handleAddRecipient(contact)
   const handleCcChange = (e) => { setCc(e.target.value); setShowCcSuggestions(e.target.value.length > 0) }
   const handleSelectCcContact = (contact) => {
     setCc((prev) => (prev && !prev.endsWith(', ') ? prev + ', ' + contact.email : prev + contact.email))
@@ -308,25 +392,41 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
 
   // ── Validate recipient before send ───────────────────────────────────────
   const validateAndSend = () => {
-    if (!recipient.trim()) { setError('Please enter a recipient'); return }
+    // Auto-commit any text still sitting in the input field
+    let finalRecipients = [...recipients]
+    if (recipientInput.trim()) {
+      const typed = recipientInput.trim()
+      const match = allContacts.find(c => c.email.toLowerCase() === typed.toLowerCase())
+      const newR = match
+        ? { email: match.email, name: match.name, approved: match.approved || match.isContact, knoccPrice: match.knoccPrice || 0 }
+        : { email: typed, name: typed, approved: false, knoccPrice: 0 }
+      finalRecipients = [...finalRecipients, newR]
+      setRecipients(finalRecipients)
+      setRecipientInput('')
+    }
+
+    if (finalRecipients.length === 0) { setError('Please enter at least one recipient'); return }
     if (!subject.trim()) { setError('Please enter a subject'); return }
     if (!message.trim()) { setError('Please enter a message'); return }
 
-    // If we matched a contact and they're not approved → Knocc flow
-    if (selectedContact && !selectedContact.approved) {
+    // Check if any recipient requires Knocc payment
+    const unapprovedRecipients = finalRecipients.filter(r => !r.approved && r.email.includes('@'))
+    if (unapprovedRecipients.length > 0) {
+      setSelectedContact(unapprovedRecipients[0])
       setShowKnoccPayment(true)
       return
     }
-    handleSend()
+    handleSend(finalRecipients)
   }
 
   // ── Send email ────────────────────────────────────────────────────────────
-  const handleSend = async () => {
+  const handleSend = async (overrideRecipients) => {
     setLoading(true)
     setError('')
     try {
+      const toList = (overrideRecipients || recipients).map(r => r.email)
       const emailData = {
-        to: [recipient],
+        to: toList,
         cc: cc ? cc.split(',').map((e) => e.trim()).filter(Boolean) : [],
         bcc: bcc ? bcc.split(',').map((e) => e.trim()).filter(Boolean) : [],
         subject,
@@ -376,7 +476,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
 
   // ── AI generation ─────────────────────────────────────────────────────────
   const handleAIGenerate = () => {
-    if (!aiPrompt.trim()) { alert('Please describe what you want to write about'); return }
+    if (!aiPrompt.trim()) { setError('Please describe what you want to write about'); return }
     const templates = {
       marketing: {
         professional: `<p>Dear Valued Customer,</p><p>We are pleased to introduce ${aiPrompt}. Our team has worked diligently to ensure this meets your expectations and delivers exceptional value.</p><p>We invite you to explore the benefits and features that make this offering unique. Should you have any questions, our dedicated team is ready to assist you.</p><p>Best regards,<br>Your Company</p>`,
@@ -420,9 +520,9 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     return (temp.textContent || temp.innerText || '').replace(/\n{3,}/g, '\n\n').trim()
   }
   const handleWhatsAppSend = () => {
-    if (!whatsappPhone.trim()) { alert('Please enter a phone number'); return }
+    if (!whatsappPhone.trim()) { setError('Please enter a phone number'); return }
     const clean = whatsappPhone.replace(/[^\d+]/g, '').replace(/^\+/, '')
-    if (!clean) { alert('Please enter a valid phone number'); return }
+    if (!clean) { setError('Please enter a valid phone number'); return }
     const text = (subject ? `*${subject}*\n\n` : '') + htmlToPlainText(message)
     window.open(`https://wa.me/${clean}?text=${encodeURIComponent(text)}`, '_blank')
     setShowWhatsAppModal(false)
@@ -497,19 +597,11 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
           <h2 className="text-base font-semibold text-gray-800 truncate flex items-center gap-2">
             {replyTo ? <><Reply className="w-4 h-4 text-blue-500" /> Reply</> :
              forwardOf ? <><Forward className="w-4 h-4 text-blue-500" /> Forward</> :
-             (recipient ? `To: ${recipient}` : 'New Message')}
+             (recipients.length > 0 ? `To: ${recipients.map(r => r.name || r.email).join(', ')}` : 'New Message')}
           </h2>
           <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
-            {draftSaved && <span className="text-xs text-green-600 mr-1">Draft saved</span>}
-            {/* Save Draft */}
-            {!isMinimized && (
-              <button onClick={() => handleSaveDraft(false)} title="Save draft"
-                className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
-                <Save className="w-4 h-4 text-gray-600" />
-              </button>
-            )}
             {/* Minimize */}
-            <button onClick={() => setIsMinimized(!isMinimized)} title={isMinimized ? 'Restore' : 'Minimize'}
+            <button onClick={() => handleAutoSaveBeforeAction(() => setIsMinimized(!isMinimized))} title={isMinimized ? 'Restore' : 'Minimize'}
               className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
               <svg className="w-4 h-4 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M20 12H4" />
@@ -529,7 +621,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
               </button>
             )}
             {/* Close */}
-            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <button onClick={() => handleAutoSaveBeforeAction(onClose)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
               <X className="w-5 h-5 text-gray-600" />
             </button>
           </div>
@@ -548,14 +640,34 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
 
               {/* To */}
               <div className="relative px-4 py-2">
-                <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-600 flex-shrink-0 w-10">To</label>
+                <div className="flex items-start gap-3">
+                  <label className="text-sm text-gray-600 flex-shrink-0 w-10 mt-1.5">To</label>
                   <div className="flex-1 relative">
-                    <input type="text" value={recipient} onChange={handleRecipientChange}
-                      onFocus={() => recipient && setShowSuggestions(true)}
-                      onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
-                      placeholder="recipient@example.com"
-                      className="w-full py-0.5 px-0 focus:outline-none text-sm" autoComplete="off" />
+                    <div className="flex flex-wrap gap-1.5 items-center min-h-[28px]">
+                      {recipients.map((r) => (
+                        <div key={r.email} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+                          <span>{r.name || r.email}</span>
+                          {!r.approved && r.email.includes('@') && (
+                            <DollarSign className="w-3 h-3" />
+                          )}
+                          <button onClick={() => handleRemoveRecipient(r.email)} className="hover:text-blue-900">
+                            <X className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                      <input
+                        ref={recipientInputRef}
+                        type="text"
+                        value={recipientInput}
+                        onChange={handleRecipientInputChange}
+                        onKeyDown={handleRecipientKeyDown}
+                        onFocus={() => recipientInput && setShowSuggestions(true)}
+                        onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                        placeholder={recipients.length === 0 ? "Type name or email" : "Add more..."}
+                        className="flex-1 min-w-[120px] py-0.5 px-0 focus:outline-none text-sm border-none"
+                        autoComplete="off"
+                      />
+                    </div>
                     {showSuggestions && filteredContacts.length > 0 && (
                       <div className="absolute z-20 left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
                         {filteredContacts.map((contact) => (
@@ -578,15 +690,25 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
                       </div>
                     )}
                   </div>
-                  <div className="flex gap-2 flex-shrink-0">
+                  <div className="flex gap-2 flex-shrink-0 mt-1.5">
                     {!showCc && <button onClick={() => setShowCc(true)} className="text-xs text-gray-500 hover:text-blue-600">Cc</button>}
                     {!showBcc && <button onClick={() => setShowBcc(true)} className="text-xs text-gray-500 hover:text-blue-600">Bcc</button>}
                   </div>
                 </div>
-                {selectedContact && !selectedContact.approved && (
+                {recipients.length > 0 && (
+                  <div className="mt-1.5 ml-[52px]">
+                    <button 
+                      onClick={() => recipientInputRef.current?.focus()}
+                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                    >
+                      <UserPlus className="w-3 h-3" /> Add another recipient
+                    </button>
+                  </div>
+                )}
+                {recipients.some(r => !r.approved && r.email.includes('@')) && (
                   <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-lg">
                     <UserPlus className="w-4 h-4 flex-shrink-0" />
-                    <span>This recipient requires a Knocc request (${selectedContact.knoccPrice}). Click Send to proceed.</span>
+                    <span>Some recipients require Knocc requests. Click Send to proceed.</span>
                   </div>
                 )}
               </div>
@@ -747,7 +869,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
                   <Send className="w-4 h-4" />
                   {loading ? 'Sending…' : 'Send'}
                 </button>
-                <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-full text-sm">Cancel</button>
+                <button onClick={() => handleAutoSaveBeforeAction(onClose)} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-full text-sm">Cancel</button>
               </div>
               <div className="flex items-center gap-1 relative">
                 <input type="file" ref={fileInputRef} onChange={handleFileAttachment} multiple className="hidden" />
@@ -801,7 +923,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
           <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
               <h2 className="text-lg font-medium text-gray-900">Knocc Request Required</h2>
-              <button onClick={() => setShowKnoccPayment(false)} className="p-1 hover:bg-gray-100 rounded-md">
+              <button onClick={() => { setShowKnoccPayment(false); setSelectedContact(null); }} className="p-1 hover:bg-gray-100 rounded-md">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
@@ -809,12 +931,17 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
               <div className="bg-gray-50 p-3 rounded-md mb-4">
                 <div className="flex justify-between items-center text-sm">
                   <span className="text-gray-600">Sending to:</span>
-                  <span className="font-medium text-gray-900">{selectedContact.name}</span>
+                  <span className="font-medium text-gray-900">{selectedContact.name || selectedContact.email}</span>
                 </div>
                 <div className="flex justify-between items-center text-sm mt-1">
                   <span className="text-gray-600">Knocc fee:</span>
-                  <span className="font-semibold text-gray-900">${selectedContact.knoccPrice}</span>
+                  <span className="font-semibold text-gray-900">${selectedContact.knoccPrice || 1}</span>
                 </div>
+                {recipients.filter(r => !r.approved && r.email.includes('@')).length > 1 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="text-xs text-gray-500">Note: You have {recipients.filter(r => !r.approved && r.email.includes('@')).length} unapproved recipients. Knocc requests will be sent to each.</p>
+                  </div>
+                )}
               </div>
               {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
               <label className="block text-sm font-medium text-gray-700 mb-2">Reason for contact *</label>
@@ -822,11 +949,11 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
                 placeholder="Explain why you want to connect..." rows={4}
                 className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none mb-4" />
               <div className="flex gap-2">
-                <button onClick={() => setShowKnoccPayment(false)}
+                <button onClick={() => { setShowKnoccPayment(false); setSelectedContact(null); }}
                   className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium">Cancel</button>
                 <button onClick={handleKnoccPayment} disabled={loading || !knoccReason.trim()}
                   className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium">
-                  {loading ? 'Sending…' : `Send Knocc ($${selectedContact.knoccPrice})`}
+                  {loading ? 'Sending…' : `Send Knocc ($${selectedContact.knoccPrice || 1})`}
                 </button>
               </div>
             </div>

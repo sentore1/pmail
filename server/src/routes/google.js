@@ -5,20 +5,28 @@ import {
   handleCallback,
   getContacts,
   getContactsWithCode,
+  getGmailAuthUrl,
+  handleGmailCallback,
+  revokeGmailAccess,
+  syncGmailLearning,
+  getGmailStatus,
 } from '../controllers/googleOAuthController.js';
 
 const router = express.Router();
 
-// Get Google OAuth URL (requires authentication)
+// ── Contacts OAuth (invite friends) ───────────────────────────────────────
 router.get('/auth-url', authenticate, getAuthUrl);
-
-// Handle OAuth callback (public route)
 router.get('/callback', handleCallback);
 
-// Get contacts with access token (requires authentication)
-router.post('/contacts', authenticate, getContacts);
+// ── Gmail AI learning OAuth ────────────────────────────────────────────────
+router.get('/gmail-auth-url', authenticate, getGmailAuthUrl);
+router.get('/gmail-callback', handleGmailCallback);           // public — OAuth redirect
+router.post('/gmail-revoke', authenticate, revokeGmailAccess);
+router.post('/gmail-sync', authenticate, syncGmailLearning);
+router.get('/gmail-status', authenticate, getGmailStatus);
 
-// Get contacts with authorization code (requires authentication)
+// ── Legacy endpoints (still supported) ────────────────────────────────────
+router.post('/contacts', authenticate, getContacts);
 router.post('/contacts-with-code', authenticate, getContactsWithCode);
 
 export default router;

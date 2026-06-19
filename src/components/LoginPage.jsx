@@ -1,19 +1,16 @@
 import React, { useState } from 'react'
 import { Mail, Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import OnboardingFlow from './OnboardingFlow'
+import { authAPI } from '../services/api'
 
 function LoginPage({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true)
+  const [showOnboarding, setShowOnboarding] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
-  const [step, setStep] = useState(1) // Multi-step form: 1=email, 2=password, 3=profile (for signup)
+  const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
-    name: '',
-    email: '',
-    password: '',
-    phoneNumber: '',
-    age: '',
-    gender: '',
-    country: '',
-    knoccPrice: '1'
+    name: '', email: '', password: '',
+    phoneNumber: '', age: '', gender: '', country: '', knoccPrice: '1'
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
@@ -58,26 +55,12 @@ function LoginPage({ onLogin }) {
   const handleLogin = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ 
-          email: formData.email, 
-          password: formData.password 
-        })
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Login failed')
-      }
-
+      const data = await authAPI.login(formData.email, formData.password)
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Login failed')
     } finally {
       setLoading(false)
     }
@@ -86,23 +69,12 @@ function LoginPage({ onLogin }) {
   const handleSignup = async () => {
     setLoading(true)
     try {
-      const response = await fetch('http://localhost:5000/api/auth/register', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Registration failed')
-      }
-
+      const data = await authAPI.register(formData)
       localStorage.setItem('token', data.token)
       localStorage.setItem('user', JSON.stringify(data.user))
       onLogin(data.user, data.token)
     } catch (err) {
-      setError(err.message)
+      setError(err.message || 'Registration failed')
     } finally {
       setLoading(false)
     }
@@ -120,9 +92,21 @@ function LoginPage({ onLogin }) {
   }
 
   const switchMode = () => {
+    if (!isLogin) {
+      // Switching to login from signup
+      setShowOnboarding(false);
+    } else {
+      // Switching to signup - show onboarding
+      setShowOnboarding(true);
+    }
     setIsLogin(!isLogin)
     setStep(1)
     setError('')
+  }
+
+  // If showing onboarding flow, render that instead
+  if (showOnboarding && !isLogin) {
+    return <OnboardingFlow onComplete={onLogin} />;
   }
 
   return (
@@ -169,13 +153,13 @@ function LoginPage({ onLogin }) {
             {step === 1 && (
               <div>
                 <input
-                  type="email"
+                  type="text"
                   name="email"
                   value={formData.email}
                   onChange={handleChange}
                   required
                   className="w-full px-4 py-3 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base"
-                  placeholder="Email"
+                  placeholder={isLogin ? 'Username or email' : 'Email'}
                   autoFocus
                 />
                 <button

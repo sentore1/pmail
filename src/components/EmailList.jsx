@@ -13,9 +13,9 @@ function EmailList({ emails, selectedEmail, onSelectEmail, viewType, onViewChang
   }
   const handleKnoccTabChange = (tab) => setKnoccTab(tab)
 
-  // Unread count (inbox only)
+  // Unread count — emails where isRead is explicitly false
   const unreadCount = useMemo(() =>
-    !isRequestView ? emails.filter((e) => !e.isRead && !e.unread === false).length : 0,
+    !isRequestView ? emails.filter((e) => e.isRead === false).length : 0,
     [emails, isRequestView]
   )
 
@@ -136,81 +136,107 @@ function EmailList({ emails, selectedEmail, onSelectEmail, viewType, onViewChang
 
       {/* Email List */}
       <div className="flex-1 overflow-y-auto">
-        {filteredEmails.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-sm">
-            {searchQuery ? 'No results found' : 'No emails'}
-          </div>
-        ) : filteredEmails.map((email) => {
-          // Support both old mock shape and real API shape
-          const senderName = email.sender?.name || email.sender || 'Unknown'
-          const senderEmail = email.sender?.email || email.email || ''
-          const subjectText = email.subject || '(No subject)'
-          const isUnread = email.isRead === false
-          const previewText = email.body
-            ? email.body.replace(/<[^>]+>/g, '').slice(0, 80)
-            : email.preview || ''
-
-          return (
-          <div
-            key={email.id}
-            onClick={() => onSelectEmail(email)}
-            className={`p-3 border-b border-gray-50 cursor-pointer transition-colors ${
-              selectedEmail?.id === email.id ? 'bg-blue-50' : 'hover:bg-gray-50'
-            }`}
-          >
-            <div className="flex items-start justify-between mb-1.5">
-              <div className="flex items-center gap-2 flex-1">
-                {isUnread && !isRequestView && (
-                  <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5"></div>
-                )}
-                {isRequestView && (
-                  <>
-                    {email.paymentType?.toLowerCase() === 'pryro' ? (
-                      <div className="w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0">
-                        <DollarSign className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                      </div>
-                    ) : email.paymentType?.toLowerCase() === 'paid' ? (
-                      <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0">
-                        <DollarSign className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                      </div>
-                    ) : (
-                      <Bell className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
-                    )}
-                  </>
-                )}
-                <span className={`text-gray-900 text-sm truncate ${isUnread && !isRequestView ? 'font-semibold' : ''}`}>
-                  {isRequestView ? (email.sender?.name || email.senderName || senderName) : senderName}
-                </span>
+        {/* Contacts / blocked users — different data shape */}
+        {(viewType === 'contacts' || viewType === 'blocked') && (
+          filteredEmails.length === 0
+            ? (
+              <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-sm">
+                {searchQuery ? 'No results found' : viewType === 'contacts' ? 'No approved contacts' : 'No blocked users'}
               </div>
-              <span className="text-xs text-gray-400 flex-shrink-0 ml-1">
-                {email.sentAt ? new Date(email.sentAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : email.timestamp}
-              </span>
-            </div>
-
-            <div className={isRequestView ? '' : (isUnread ? 'ml-3.5' : 'ml-3.5')}>
-              <p className="text-gray-700 mb-0.5 text-sm flex items-center gap-1.5">
-                {isRequestView ? 'Reason: ' + (email.reason || '') : subjectText}
-                {isRequestView && email.paymentType?.toLowerCase() === 'pryro' && (
-                  <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium">${email.paymentAmount}</span>
-                )}
-                {isRequestView && email.paymentType?.toLowerCase() === 'paid' && (
-                  <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium">${email.paymentAmount}</span>
-                )}
-              </p>
-              <p className="text-xs text-gray-500 truncate">
-                {isRequestView ? senderEmail : previewText}
-              </p>
-              {isRequestView && email.status?.toLowerCase() === 'pending' && (
-                <div className="flex items-center gap-1 mt-1.5">
-                  <span className="inline-flex items-center gap-1 text-xs text-gray-500">
-                    <Clock className="w-3 h-3" /> Pending
-                  </span>
+            )
+            : filteredEmails.map((person) => (
+              <div key={person.id} onClick={() => onSelectEmail(person)}
+                className={`p-3 border-b border-gray-50 cursor-pointer transition-colors ${
+                  selectedEmail?.id === person.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                }`}
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0">
+                    <span className="text-blue-600 text-sm font-medium">
+                      {(person.name || person.email || '?')[0].toUpperCase()}
+                    </span>
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900 truncate">{person.name || 'Unknown'}</p>
+                    <p className="text-xs text-gray-500 truncate">{person.email}</p>
+                    {person.country && <p className="text-xs text-gray-400">{person.country}</p>}
+                  </div>
+                  {viewType === 'blocked' && <span className="text-xs text-red-500 flex-shrink-0">Blocked</span>}
+                  {viewType === 'contacts' && person.verified && <span className="text-xs text-blue-500 flex-shrink-0">✓</span>}
                 </div>
-              )}
-            </div>
-          </div>
-        )})}
+              </div>
+            ))
+        )}
 
+        {/* Emails / Knocc requests */}
+        {viewType !== 'contacts' && viewType !== 'blocked' && (
+          filteredEmails.length === 0
+            ? (
+              <div className="flex flex-col items-center justify-center h-32 text-gray-400 text-sm">
+                {searchQuery ? 'No results found' : 'No emails'}
+              </div>
+            )
+            : filteredEmails.map((email) => {
+                const senderName = email.sender?.name || email.sender || 'Unknown'
+                const senderEmail = email.sender?.email || email.email || ''
+                const subjectText = email.subject || '(No subject)'
+                const isUnread = email.isRead === false
+                const previewText = email.body
+                  ? email.body.replace(/<[^>]+>/g, '').slice(0, 80)
+                  : email.preview || ''
+
+                return (
+                  <div key={email.id} onClick={() => onSelectEmail(email)}
+                    className={`p-3 border-b border-gray-50 cursor-pointer transition-colors ${
+                      selectedEmail?.id === email.id ? 'bg-blue-50' : 'hover:bg-gray-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between mb-1.5">
+                      <div className="flex items-center gap-2 flex-1">
+                        {isUnread && !isRequestView && (
+                          <div className="w-1.5 h-1.5 bg-blue-600 rounded-full flex-shrink-0 mt-1.5" />
+                        )}
+                        {isRequestView && (
+                          email.paymentType?.toLowerCase() === 'pryro'
+                            ? <div className="w-4 h-4 bg-purple-500 rounded-full flex items-center justify-center flex-shrink-0"><DollarSign className="w-2.5 h-2.5 text-white" strokeWidth={3} /></div>
+                            : email.paymentType?.toLowerCase() === 'paid'
+                              ? <div className="w-4 h-4 bg-green-500 rounded-full flex items-center justify-center flex-shrink-0"><DollarSign className="w-2.5 h-2.5 text-white" strokeWidth={3} /></div>
+                              : <Bell className="w-3.5 h-3.5 text-orange-500 flex-shrink-0 mt-0.5" />
+                        )}
+                        <span className={`text-gray-900 text-sm truncate ${isUnread && !isRequestView ? 'font-semibold' : ''}`}>
+                          {isRequestView ? (email.sender?.name || senderName) : senderName}
+                        </span>
+                      </div>
+                      <span className="text-xs text-gray-400 flex-shrink-0 ml-1">
+                        {email.sentAt
+                          ? new Date(email.sentAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })
+                          : email.timestamp}
+                      </span>
+                    </div>
+
+                    <div className="ml-3.5">
+                      <p className="text-gray-700 mb-0.5 text-sm flex items-center gap-1.5 truncate">
+                        {isRequestView ? ('Reason: ' + (email.reason || '')) : subjectText}
+                        {isRequestView && email.paymentType?.toLowerCase() === 'pryro' && (
+                          <span className="text-xs bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">${email.paymentAmount}</span>
+                        )}
+                        {isRequestView && email.paymentType?.toLowerCase() === 'paid' && (
+                          <span className="text-xs bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-medium flex-shrink-0">${email.paymentAmount}</span>
+                        )}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {isRequestView ? senderEmail : previewText}
+                      </p>
+                      {isRequestView && email.status?.toLowerCase() === 'pending' && (
+                        <span className="inline-flex items-center gap-1 text-xs text-gray-500 mt-1">
+                          <Clock className="w-3 h-3" /> Pending
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                )
+              })
+        )}
       </div>
     </div>
   )

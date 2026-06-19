@@ -24,9 +24,21 @@ model User {
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
 
+  // User Intelligence Data
+  trustScore        Float?    @default(0)
+  riskLevel         String?   @default("UNKNOWN")
+  interests         String?   // JSON array of interests
+  socialPresence    Boolean   @default(false)
+
   // User's settings
   autoApprove       Boolean   @default(false)
   requireReason     Boolean   @default(true)
+
+  // Gmail AI learning
+  gmailAccessEnabled Boolean  @default(false)
+  gmailRefreshToken  String?  // Encrypted refresh token for offline access
+  gmailLearnedTopics String?  // JSON array of topics learned from sent mail
+  gmailLastSynced    DateTime?
 
   // Relationships
   sentEmails        Email[]   @relation("SentEmails")
