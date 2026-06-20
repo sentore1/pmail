@@ -35,12 +35,11 @@ function App() {
   const [inboxView, setInboxView] = useState('inbox')
   const [knoccFilter, setKnoccFilter] = useState('all')
 
-  // Check if user is already logged in
+  // ── Auth check on mount ────────────────────────────────────────────────────
   useEffect(() => {
     const checkAuth = async () => {
       const token = localStorage.getItem('token')
       const storedUser = localStorage.getItem('user')
-
       if (token && storedUser) {
         try {
           const response = await authAPI.getMe()
@@ -59,23 +58,32 @@ function App() {
       }
       setLoading(false)
     }
-
     checkAuth()
   }, [])
 
-  // Load emails and requests when authenticated
+  // ── Load data when view / filter changes ───────────────────────────────────
   useEffect(() => {
-    if (isAuthenticated) {
-      loadData()
-      // Keep draft badge count fresh on every view change (except drafts view — loadData handles that)
-      if (currentView !== 'drafts') {
-        emailAPI.getDrafts().then((r) => setDraftEmails(r.drafts || [])).catch(() => {})
-      }
+    if (!isAuthenticated) return
+    loadData()
+    // Keep draft badge fresh on every view change
+    if (currentView !== 'drafts') {
+      emailAPI.getDrafts().then((r) => setDraftEmails(r.drafts || [])).catch(() => {})
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isAuthenticated, currentView, inboxView, knoccFilter])
 
+  // ── Data fetcher ───────────────────────────────────────────────────────────
   const loadData = async () => {
     try {
+      if (currentView === 'knocc-requests') {
+        const response = await knoccAPI.getRequests(knoccFilter)
+        setRequests(response.requests || [])
+        return
+      }
+
+      // Always keep knocc badge count fresh in background
+      knoccAPI.getRequests('all').then(r => setRequests(r.requests || [])).catch(() => {})
+
       if (currentView === 'inbox') {
         if (inboxView === 'inbox') {
           const response = await emailAPI.getInbox()
@@ -84,9 +92,6 @@ function App() {
           const response = await emailAPI.getSentEmails()
           setSentEmails(response.emails || [])
         }
-      } else if (currentView === 'knocc-requests') {
-        const response = await knoccAPI.getRequests(knoccFilter)
-        setRequests(response.requests || [])
       } else if (currentView === 'sent') {
         const response = await emailAPI.getSentEmails()
         setSentEmails(response.emails || [])
@@ -125,21 +130,17 @@ function App() {
     localStorage.removeItem('user')
   }
 
-  const handleRefresh = () => {
-    loadData()
-    setSelectedEmail(null)
+  const handleRefresh = async () => {
+    await loadData()
   }
 
   const handleDeleteEmails = async (ids) => {
     try {
       if (currentView === 'bin') {
-        // Permanent delete — ignore 404s (already gone is fine)
         await Promise.allSettled(ids.map((id) => emailAPI.permanentlyDeleteEmail(id)))
       } else {
-        // Soft-delete (move to bin)
         await Promise.allSettled(ids.map((id) => emailAPI.deleteEmail(id)))
       }
-      // If the currently-open email was deleted, close it
       if (selectedEmail && ids.includes(selectedEmail.id)) {
         setSelectedEmail(null)
       }
@@ -175,20 +176,19 @@ function App() {
     return emails
   }
 
-  // Computed counts for sidebar badges
   const unreadCount = emails.filter((e) => e.isRead === false).length
   const knoccRequestCount = requests.filter((r) => r.status === 'PENDING').length
   const draftCount = draftEmails.length
 
   return (
     <div className="flex h-screen bg-white">
-      {/* Main Content */}
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar 
+        <Sidebar
           onCompose={() => setShowCompose(true)}
           onShowKnoccRequests={() => {
             setCurrentView('knocc-requests')
             setInboxView('all')
+            setSelectedEmail(null)
           }}
           onShowInbox={() => {
             setCurrentView('inbox')
@@ -207,14 +207,12 @@ function App() {
           user={user}
           onLogout={handleLogout}
         />
-        
-        <div className="flex-1 flex relative">
 
-          <EmailList 
+        <div className="flex-1 flex relative">
+          <EmailList
             emails={getDisplayEmails()}
             selectedEmail={selectedEmail}
             onSelectEmail={(email) => {
-              // Drafts open in the compose modal for editing, not in the detail view
               if (currentView === 'drafts') {
                 setComposeDraft(email)
                 setComposeReplyTo(null)
@@ -236,12 +234,29 @@ function App() {
             }}
             onDeleteEmails={handleDeleteEmails}
           />
-          
-          <EmailDetail 
+
+          <EmailDetail
             email={selectedEmail}
             viewType={currentView}
             onClose={() => setSelectedEmail(null)}
             onRefresh={handleRefresh}
+            onApproved={(sender) => {
+              // Navigate to inbox and open a compose window pre-filled to the new contact
+              setCurrentView('inbox')
+              setInboxView('inbox')
+              setSelectedEmail(null)
+              setComposeReplyTo({
+                senderId: sender.id,
+                senderEmail: sender.email,
+                senderName: sender.name,
+                subject: '',
+                body: '',
+                date: '',
+              })
+              setComposeForwardOf(null)
+              setComposeDraft(null)
+              setShowCompose(true)
+            }}
             onReply={(ctx) => {
               setComposeReplyTo(ctx)
               setComposeForwardOf(null)
@@ -257,7 +272,7 @@ function App() {
       </div>
 
       {showCompose && (
-        <ComposeModal 
+        <ComposeModal
           onClose={() => {
             setShowCompose(false)
             setComposeReplyTo(null)
@@ -279,13 +294,11 @@ function App() {
       )}
 
       {showKnoccRequest && (
-        <KnoccRequestModal 
-          onClose={() => setShowKnoccRequest(false)}
-        />
+        <KnoccRequestModal onClose={() => setShowKnoccRequest(false)} />
       )}
 
       {showSettings && (
-        <SettingsModal 
+        <SettingsModal
           onClose={() => setShowSettings(false)}
           user={user}
           onLogout={handleLogout}
@@ -301,16 +314,11 @@ function App() {
       )}
 
       {showWallet && (
-        <WalletModal 
-          onClose={() => setShowWallet(false)}
-          user={user}
-        />
+        <WalletModal onClose={() => setShowWallet(false)} user={user} />
       )}
 
       {showInvite && (
-        <InviteFriendsModal
-          onClose={() => setShowInvite(false)}
-        />
+        <InviteFriendsModal onClose={() => setShowInvite(false)} />
       )}
     </div>
   )

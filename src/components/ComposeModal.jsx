@@ -129,9 +129,23 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
         }])
       }
       setSubject(replyTo.subject?.startsWith('Re:') ? replyTo.subject : `Re: ${replyTo.subject || ''}`)
+
+      // Strip any existing blockquote chain — only quote the top-level message text
+      const stripQuotes = (html) => {
+        const div = document.createElement('div')
+        div.innerHTML = html || ''
+        div.querySelectorAll('blockquote').forEach((el) => el.remove())
+        // Also remove the "On ... wrote:" attribution lines left behind
+        div.querySelectorAll('p, div').forEach((el) => {
+          if (/On .+wrote:/i.test(el.textContent)) el.remove()
+        })
+        return div.innerHTML.trim()
+      }
+
+      const cleanBody = stripQuotes(replyTo.body || '')
       const quoted = `<br/><br/><blockquote style="border-left:3px solid #d1d5db;padding-left:12px;color:#6b7280;margin:0">`
         + `<p style="margin:0 0 4px;font-size:12px;color:#9ca3af">On ${replyTo.date || ''}, ${recipientName} wrote:</p>`
-        + (replyTo.body || '')
+        + cleanBody
         + `</blockquote>`
       setTimeout(() => {
         if (messageRef.current) {

@@ -1,24 +1,66 @@
 import express from 'express';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { learnFromSentEmails, getLearningProfile } from '../services/emailLearningEngine.js';
+import { lookupPublicFigure, calcAge } from '../services/publicFigures.js';
 import axios from 'axios';
 import { authenticate } from '../middleware/auth.js';
 
-// Re-use dial map inline (small, no circular dep needed)
+// Complete world dial code map (all UN-recognised + commonly used territories)
 const COUNTRY_DIAL = {
-  'United States':'+1','Canada':'+1','United Kingdom':'+44','Australia':'+61',
-  'New Zealand':'+64','Germany':'+49','France':'+33','Spain':'+34','Italy':'+39',
-  'Netherlands':'+31','Belgium':'+32','Switzerland':'+41','Austria':'+43',
-  'Sweden':'+46','Norway':'+47','Denmark':'+45','Finland':'+358','Ireland':'+353',
-  'Poland':'+48','Portugal':'+351','Greece':'+30','Czech Republic':'+420',
-  'Hungary':'+36','Romania':'+40','Ukraine':'+380','Russia':'+7','Turkey':'+90',
-  'Israel':'+972','Saudi Arabia':'+966','United Arab Emirates':'+971',
-  'Egypt':'+20','Nigeria':'+234','Kenya':'+254','South Africa':'+27',
-  'Ghana':'+233','India':'+91','Pakistan':'+92','Bangladesh':'+880',
-  'China':'+86','Japan':'+81','South Korea':'+82','Singapore':'+65',
-  'Malaysia':'+60','Thailand':'+66','Vietnam':'+84','Indonesia':'+62',
-  'Philippines':'+63','Mexico':'+52','Brazil':'+55','Argentina':'+54',
-  'Chile':'+56','Colombia':'+57','Peru':'+51',
+  'Afghanistan':'+93','Albania':'+355','Algeria':'+213','Andorra':'+376',
+  'Angola':'+244','Antigua and Barbuda':'+1-268','Argentina':'+54',
+  'Armenia':'+374','Australia':'+61','Austria':'+43','Azerbaijan':'+994',
+  'Bahamas':'+1-242','Bahrain':'+973','Bangladesh':'+880','Barbados':'+1-246',
+  'Belarus':'+375','Belgium':'+32','Belize':'+501','Benin':'+229',
+  'Bhutan':'+975','Bolivia':'+591','Bosnia and Herzegovina':'+387',
+  'Botswana':'+267','Brazil':'+55','Brunei':'+673','Bulgaria':'+359',
+  'Burkina Faso':'+226','Burundi':'+257','Cambodia':'+855','Cameroon':'+237',
+  'Canada':'+1','Cape Verde':'+238','Central African Republic':'+236',
+  'Chad':'+235','Chile':'+56','China':'+86','Colombia':'+57',
+  'Comoros':'+269','Congo':'+242','Costa Rica':'+506','Croatia':'+385',
+  'Cuba':'+53','Cyprus':'+357','Czech Republic':'+420','Denmark':'+45',
+  'Djibouti':'+253','Dominica':'+1-767','Dominican Republic':'+1-809',
+  'DR Congo':'+243','Ecuador':'+593','Egypt':'+20','El Salvador':'+503',
+  'Equatorial Guinea':'+240','Eritrea':'+291','Estonia':'+372',
+  'Eswatini':'+268','Ethiopia':'+251','Fiji':'+679','Finland':'+358',
+  'France':'+33','Gabon':'+241','Gambia':'+220','Georgia':'+995',
+  'Germany':'+49','Ghana':'+233','Greece':'+30','Grenada':'+1-473',
+  'Guatemala':'+502','Guinea':'+224','Guinea-Bissau':'+245','Guyana':'+592',
+  'Haiti':'+509','Honduras':'+504','Hungary':'+36','Iceland':'+354',
+  'India':'+91','Indonesia':'+62','Iran':'+98','Iraq':'+964',
+  'Ireland':'+353','Israel':'+972','Italy':'+39','Ivory Coast':'+225',
+  'Jamaica':'+1-876','Japan':'+81','Jordan':'+962','Kazakhstan':'+7',
+  'Kenya':'+254','Kiribati':'+686','Kuwait':'+965','Kyrgyzstan':'+996',
+  'Laos':'+856','Latvia':'+371','Lebanon':'+961','Lesotho':'+266',
+  'Liberia':'+231','Libya':'+218','Liechtenstein':'+423','Lithuania':'+370',
+  'Luxembourg':'+352','Madagascar':'+261','Malawi':'+265','Malaysia':'+60',
+  'Maldives':'+960','Mali':'+223','Malta':'+356','Marshall Islands':'+692',
+  'Mauritania':'+222','Mauritius':'+230','Mexico':'+52',
+  'Micronesia':'+691','Moldova':'+373','Monaco':'+377','Mongolia':'+976',
+  'Montenegro':'+382','Morocco':'+212','Mozambique':'+258','Myanmar':'+95',
+  'Namibia':'+264','Nauru':'+674','Nepal':'+977','Netherlands':'+31',
+  'New Zealand':'+64','Nicaragua':'+505','Niger':'+227','Nigeria':'+234',
+  'North Korea':'+850','North Macedonia':'+389','Norway':'+47','Oman':'+968',
+  'Pakistan':'+92','Palau':'+680','Palestine':'+970','Panama':'+507',
+  'Papua New Guinea':'+675','Paraguay':'+595','Peru':'+51',
+  'Philippines':'+63','Poland':'+48','Portugal':'+351','Qatar':'+974',
+  'Romania':'+40','Russia':'+7','Rwanda':'+250',
+  'Saint Kitts and Nevis':'+1-869','Saint Lucia':'+1-758',
+  'Saint Vincent and the Grenadines':'+1-784','Samoa':'+685',
+  'San Marino':'+378','Saudi Arabia':'+966','Senegal':'+221','Serbia':'+381',
+  'Seychelles':'+248','Sierra Leone':'+232','Singapore':'+65',
+  'Slovakia':'+421','Slovenia':'+386','Solomon Islands':'+677',
+  'Somalia':'+252','South Africa':'+27','South Korea':'+82',
+  'South Sudan':'+211','Spain':'+34','Sri Lanka':'+94','Sudan':'+249',
+  'Suriname':'+597','Sweden':'+46','Switzerland':'+41','Syria':'+963',
+  'Taiwan':'+886','Tajikistan':'+992','Tanzania':'+255','Thailand':'+66',
+  'Timor-Leste':'+670','Togo':'+228','Tonga':'+676',
+  'Trinidad and Tobago':'+1-868','Tunisia':'+216','Turkey':'+90',
+  'Turkmenistan':'+993','Tuvalu':'+688','Uganda':'+256','Ukraine':'+380',
+  'United Arab Emirates':'+971','United Kingdom':'+44','United States':'+1',
+  'Uruguay':'+598','Uzbekistan':'+998','Vanuatu':'+678','Vatican City':'+39',
+  'Venezuela':'+58','Vietnam':'+84','Yemen':'+967','Zambia':'+260',
+  'Zimbabwe':'+263',
 };
 
 const router = express.Router();
@@ -167,44 +209,81 @@ router.post('/suggest-phone', authenticate, async (req, res) => {
 
 /**
  * POST /api/intelligence/scrape-user-data
- * Profile a user from name + browser signals (timezone, language)
- * No random data — real signals only
+ * Profile a user from their real IP + browser signals (timezone, language, name).
+ * If the name matches a known public figure, use that data directly.
+ * Otherwise: IP geolocation is the primary signal, timezone corroborates.
  */
 router.post('/scrape-user-data', async (req, res) => {
   try {
     const { name, email, timezone, language } = req.body;
 
-    // Run public data profiling (timezone → country is the primary signal)
-    const profile = await userIntelligenceEngine.scrapePublicData(
-      name || '', email || '', timezone || null, language || null
-    );
+    // ── 1. Public figure check (most accurate possible signal) ───────────────
+    const figure = lookupPublicFigure(name || '');
+    if (figure) {
+      const dialCode = COUNTRY_DIAL[figure.country] || null;
+      return res.json({
+        success: true,
+        data: {
+          country:    figure.country,
+          city:       null,
+          timezone:   null,
+          dialCode,
+          gender:     figure.gender,
+          age:        calcAge(figure.birthYear),
+          nameOrigin: 'public_figure',
+          interests:  [figure.occupation],
+          signals: {
+            source:     'public_figure',
+            figureName: figure.fullName,
+            ipCountry:  null,
+            tzCountry:  null,
+            isVPN:      false,
+          },
+        },
+      });
+    }
 
-    // Also run IP-based geo as a cross-check
-    const ip = req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
-               req.socket?.remoteAddress || req.ip;
-    const ipData = await userIntelligenceEngine.resolveIP(ip);
+    // ── 2. Regular user: IP geo (primary) + timezone (corroboration) ─────────
+    const ip =
+      req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req.headers['x-real-ip'] ||
+      req.socket?.remoteAddress ||
+      req.ip;
 
-    // Merge: timezone takes priority, then IP
-    const country  = profile.country  || ipData?.country  || null;
-    const city     = ipData?.city     || null;
+    // Run IP geo + name profiling in parallel for speed
+    const [ipData, profile] = await Promise.all([
+      userIntelligenceEngine.resolveIP(ip),
+      userIntelligenceEngine.scrapePublicData(name || '', email || '', timezone || null, language || null),
+    ]);
+
+    // Priority: IP geo first (most reliable), then timezone, then language/name
+    const country = ipData?.country || profile.country || null;
+    const source  = ipData?.country ? 'ip' : (profile.country ? (timezone ? 'timezone' : 'language') : 'name');
+
+    const tzCountry = timezone ? userIntelligenceEngine.timezoneToCountry(timezone) : null;
+    if (tzCountry && ipData?.country && tzCountry !== ipData.country) {
+      console.log(`[scrape] TZ says ${tzCountry}, IP says ${ipData.country} — trusting IP`);
+    }
+
     const dialCode = country ? (Object.entries(COUNTRY_DIAL).find(([c]) => c === country)?.[1] || null) : null;
 
     res.json({
       success: true,
       data: {
         country,
-        city,
-        timezone: profile.timezone || ipData?.timezone || null,
+        city:       ipData?.city     || null,
+        timezone:   ipData?.timezone || timezone || null,
         dialCode,
-        gender:    profile.gender    || null,
+        gender:     profile.gender   || null,
+        age:        null,
         nameOrigin: profile.nameOrigin || null,
         interests:  profile.interests  || [],
-        // confidence signals for frontend debugging
         signals: {
-          fromTimezone: !!profile.country,
-          fromLanguage: !profile.country && !!profile.language,
-          fromIP:       !profile.country && !!ipData?.country,
-          fromName:     !profile.country && !!profile.nameOrigin,
+          source,
+          ipCountry:  ipData?.country  || null,
+          tzCountry:  tzCountry        || null,
+          ipCity:     ipData?.city     || null,
+          isVPN:      ipData?.isVPN    || false,
         },
       },
     });

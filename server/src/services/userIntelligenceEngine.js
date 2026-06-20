@@ -155,24 +155,60 @@ const LANG_COUNTRY = {
 
 // ── Dial code → country ───────────────────────────────────────────────────────
 const COUNTRY_DIAL = {
-  'United States': '+1', 'Canada': '+1', 'United Kingdom': '+44',
-  'Australia': '+61', 'New Zealand': '+64', 'Germany': '+49',
-  'France': '+33', 'Spain': '+34', 'Italy': '+39', 'Netherlands': '+31',
-  'Belgium': '+32', 'Switzerland': '+41', 'Austria': '+43', 'Sweden': '+46',
-  'Norway': '+47', 'Denmark': '+45', 'Finland': '+358', 'Ireland': '+353',
-  'Poland': '+48', 'Portugal': '+351', 'Greece': '+30', 'Czech Republic': '+420',
-  'Hungary': '+36', 'Romania': '+40', 'Bulgaria': '+359', 'Ukraine': '+380',
-  'Russia': '+7', 'Turkey': '+90', 'Israel': '+972', 'Saudi Arabia': '+966',
-  'United Arab Emirates': '+971', 'Qatar': '+974', 'Kuwait': '+965',
-  'Egypt': '+20', 'Morocco': '+212', 'Nigeria': '+234', 'Kenya': '+254',
-  'South Africa': '+27', 'Ghana': '+233', 'Ethiopia': '+251',
-  'India': '+91', 'Pakistan': '+92', 'Bangladesh': '+880', 'Sri Lanka': '+94',
-  'China': '+86', 'Japan': '+81', 'South Korea': '+82', 'Taiwan': '+886',
-  'Hong Kong': '+852', 'Singapore': '+65', 'Malaysia': '+60',
-  'Thailand': '+66', 'Vietnam': '+84', 'Indonesia': '+62',
-  'Philippines': '+63', 'Myanmar': '+95', 'Cambodia': '+855',
-  'Mexico': '+52', 'Brazil': '+55', 'Argentina': '+54', 'Chile': '+56',
-  'Colombia': '+57', 'Peru': '+51', 'Venezuela': '+58', 'Ecuador': '+593',
+  'Afghanistan':'+93','Albania':'+355','Algeria':'+213','Andorra':'+376',
+  'Angola':'+244','Antigua and Barbuda':'+1-268','Argentina':'+54',
+  'Armenia':'+374','Australia':'+61','Austria':'+43','Azerbaijan':'+994',
+  'Bahamas':'+1-242','Bahrain':'+973','Bangladesh':'+880','Barbados':'+1-246',
+  'Belarus':'+375','Belgium':'+32','Belize':'+501','Benin':'+229',
+  'Bhutan':'+975','Bolivia':'+591','Bosnia and Herzegovina':'+387',
+  'Botswana':'+267','Brazil':'+55','Brunei':'+673','Bulgaria':'+359',
+  'Burkina Faso':'+226','Burundi':'+257','Cambodia':'+855','Cameroon':'+237',
+  'Canada':'+1','Cape Verde':'+238','Central African Republic':'+236',
+  'Chad':'+235','Chile':'+56','China':'+86','Colombia':'+57',
+  'Comoros':'+269','Congo':'+242','Costa Rica':'+506','Croatia':'+385',
+  'Cuba':'+53','Cyprus':'+357','Czech Republic':'+420','Denmark':'+45',
+  'Djibouti':'+253','Dominica':'+1-767','Dominican Republic':'+1-809',
+  'DR Congo':'+243','Ecuador':'+593','Egypt':'+20','El Salvador':'+503',
+  'Equatorial Guinea':'+240','Eritrea':'+291','Estonia':'+372',
+  'Eswatini':'+268','Ethiopia':'+251','Fiji':'+679','Finland':'+358',
+  'France':'+33','Gabon':'+241','Gambia':'+220','Georgia':'+995',
+  'Germany':'+49','Ghana':'+233','Greece':'+30','Grenada':'+1-473',
+  'Guatemala':'+502','Guinea':'+224','Guinea-Bissau':'+245','Guyana':'+592',
+  'Haiti':'+509','Honduras':'+504','Hungary':'+36','Iceland':'+354',
+  'India':'+91','Indonesia':'+62','Iran':'+98','Iraq':'+964',
+  'Ireland':'+353','Israel':'+972','Italy':'+39','Ivory Coast':'+225',
+  'Jamaica':'+1-876','Japan':'+81','Jordan':'+962','Kazakhstan':'+7',
+  'Kenya':'+254','Kiribati':'+686','Kuwait':'+965','Kyrgyzstan':'+996',
+  'Laos':'+856','Latvia':'+371','Lebanon':'+961','Lesotho':'+266',
+  'Liberia':'+231','Libya':'+218','Liechtenstein':'+423','Lithuania':'+370',
+  'Luxembourg':'+352','Madagascar':'+261','Malawi':'+265','Malaysia':'+60',
+  'Maldives':'+960','Mali':'+223','Malta':'+356','Marshall Islands':'+692',
+  'Mauritania':'+222','Mauritius':'+230','Mexico':'+52',
+  'Micronesia':'+691','Moldova':'+373','Monaco':'+377','Mongolia':'+976',
+  'Montenegro':'+382','Morocco':'+212','Mozambique':'+258','Myanmar':'+95',
+  'Namibia':'+264','Nauru':'+674','Nepal':'+977','Netherlands':'+31',
+  'New Zealand':'+64','Nicaragua':'+505','Niger':'+227','Nigeria':'+234',
+  'North Korea':'+850','North Macedonia':'+389','Norway':'+47','Oman':'+968',
+  'Pakistan':'+92','Palau':'+680','Palestine':'+970','Panama':'+507',
+  'Papua New Guinea':'+675','Paraguay':'+595','Peru':'+51',
+  'Philippines':'+63','Poland':'+48','Portugal':'+351','Qatar':'+974',
+  'Romania':'+40','Russia':'+7','Rwanda':'+250',
+  'Saint Kitts and Nevis':'+1-869','Saint Lucia':'+1-758',
+  'Saint Vincent and the Grenadines':'+1-784','Samoa':'+685',
+  'San Marino':'+378','Saudi Arabia':'+966','Senegal':'+221','Serbia':'+381',
+  'Seychelles':'+248','Sierra Leone':'+232','Singapore':'+65',
+  'Slovakia':'+421','Slovenia':'+386','Solomon Islands':'+677',
+  'Somalia':'+252','South Africa':'+27','South Korea':'+82',
+  'South Sudan':'+211','Spain':'+34','Sri Lanka':'+94','Sudan':'+249',
+  'Suriname':'+597','Sweden':'+46','Switzerland':'+41','Syria':'+963',
+  'Taiwan':'+886','Tajikistan':'+992','Tanzania':'+255','Thailand':'+66',
+  'Timor-Leste':'+670','Togo':'+228','Tonga':'+676',
+  'Trinidad and Tobago':'+1-868','Tunisia':'+216','Turkey':'+90',
+  'Turkmenistan':'+993','Tuvalu':'+688','Uganda':'+256','Ukraine':'+380',
+  'United Arab Emirates':'+971','United Kingdom':'+44','United States':'+1',
+  'Uruguay':'+598','Uzbekistan':'+998','Vanuatu':'+678','Vatican City':'+39',
+  'Venezuela':'+58','Vietnam':'+84','Yemen':'+967','Zambia':'+260',
+  'Zimbabwe':'+263',
 };
 
 // ── Name surname → origin database (500+ surnames) ───────────────────────────
@@ -202,6 +238,14 @@ const NAME_ORIGINS = {
     'chakraborty','sen','mandal','ahmed','ali','khan','hussain','ansari',
     'qureshi','siddiqui','malik','chaudhary','rahman','islam','hossain',
     'begum','akhtar','iqbal','mirza','sheikh','chowdhury',
+    // Sri Lankan (Sinhalese + Tamil)
+    'palihapitiya','jayawardena','wickramasinghe','rajapaksa','dissanayake',
+    'perera','fernando','silva','de silva','jayasuriya','kumaratunga',
+    'senanayake','bandaranaike','wijesinghe','rajapakse','kodithuwakku',
+    'liyanage','herath','wijeratne','samaraweera','gunawardena',
+    'karunathilake','samarasinghe','wickramaratne','amarasinghe',
+    'ranasinghe','pathirage','jayatilaka','subramaniam','seneviratne',
+    'munasinghe','rathnayake','weerasinghe','weerasekera','premadasa',
   ],
   // East Asian
   eastasian: [
@@ -376,7 +420,7 @@ class UserIntelligenceEngine {
         ? `https://ipapi.co/${lookupIp}/json/`
         : 'https://ipapi.co/json/';
       const r = await axios.get(url, { timeout: 4000 });
-      if (r.data && !r.data.error) {
+      if (r.data && !r.data.error && r.data.country_name) {
         result.country     = r.data.country_name   || null;
         result.countryCode = r.data.country_code   || null;
         result.region      = r.data.region         || null;
@@ -403,7 +447,41 @@ class UserIntelligenceEngine {
           result.isProxy     = r.data.proxy        || false;
           result.isVPN       = r.data.hosting      || false;
         }
-      } catch { /* both failed */ }
+      } catch { /* try next */ }
+    }
+
+    // Provider 3: freeipapi.com (HTTPS, no key, generous limit)
+    if (!result.country) {
+      try {
+        const url = lookupIp
+          ? `https://freeipapi.com/api/json/${lookupIp}`
+          : 'https://freeipapi.com/api/json/';
+        const r = await axios.get(url, { timeout: 4000 });
+        if (r.data?.countryName) {
+          result.country     = r.data.countryName   || null;
+          result.countryCode = r.data.countryCode   || null;
+          result.city        = r.data.cityName       || null;
+          result.timezone    = r.data.timeZone       || null;
+        }
+      } catch { /* all failed */ }
+    }
+
+    // Provider 4: ipwho.is (HTTPS, no key, last resort)
+    if (!result.country) {
+      try {
+        const url = lookupIp
+          ? `https://ipwho.is/${lookupIp}`
+          : 'https://ipwho.is/';
+        const r = await axios.get(url, { timeout: 4000 });
+        if (r.data?.success && r.data?.country) {
+          result.country     = r.data.country       || null;
+          result.countryCode = r.data.country_code  || null;
+          result.region      = r.data.region        || null;
+          result.city        = r.data.city          || null;
+          result.timezone    = r.data.timezone?.id  || null;
+          result.isp         = r.data.connection?.isp || null;
+        }
+      } catch { /* all failed */ }
     }
 
     // VPN heuristic from ISP name
@@ -485,16 +563,15 @@ class UserIntelligenceEngine {
     const f = firstName.toLowerCase();
     if (MALE_FIRST_NAMES.has(f)) return 'male';
     if (FEMALE_FIRST_NAMES.has(f)) return 'female';
-    // Heuristic suffixes
-    if (f.endsWith('a') || f.endsWith('ia') || f.endsWith('ina') ||
-        f.endsWith('elle') || f.endsWith('ette')) return 'female';
+    // Only return a value when we're confident — no suffix guessing
+    // Suffix heuristics cause too many false positives (e.g. "Chamath" ends in nothing female)
     return null;
   }
 
   originMatchesCountry(origin, country) {
     const map = {
       western:      ['United States','United Kingdom','Canada','Australia','New Zealand','Ireland','South Africa'],
-      southasian:   ['India','Pakistan','Bangladesh','Sri Lanka','Nepal'],
+      southasian:   ['India','Pakistan','Bangladesh','Sri Lanka','Nepal','Maldives'],
       eastasian:    ['China','Japan','South Korea','Taiwan','Hong Kong','Vietnam','Philippines','Singapore'],
       hispanic:     ['Mexico','Spain','Argentina','Colombia','Chile','Peru','Venezuela','Ecuador','Brazil'],
       african:      ['Nigeria','Kenya','South Africa','Ghana','Ethiopia','Tanzania','Uganda','Senegal'],
@@ -692,12 +769,29 @@ class UserIntelligenceEngine {
       result.nameOrigin = this.detectNameOrigin(name);
 
       // If name strongly implies a country and we have no country yet, use it
+      // Note: southasian is broad (India/Sri Lanka/Pakistan/Bangladesh) — don't default it
       if (!result.country && result.nameOrigin !== 'unknown') {
         const originMap = {
-          eastasian:    'China', southasian: 'India', hispanic: 'Mexico',
-          african:      'Nigeria', middleeastern: 'Saudi Arabia', slavic: 'Russia',
+          eastasian:    'China',
+          hispanic:     'Mexico',
+          african:      'Nigeria',
+          middleeastern:'Saudi Arabia',
+          slavic:       'Russia',
         };
         if (originMap[result.nameOrigin]) result.country = originMap[result.nameOrigin];
+
+        // For Sri Lankan surnames specifically, map to Sri Lanka
+        const sriLankanSurnames = [
+          'palihapitiya','jayawardena','wickramasinghe','rajapaksa','dissanayake',
+          'perera','jayasuriya','kumaratunga','senanayake','bandaranaike',
+          'wijesinghe','rajapakse','kodithuwakku','liyanage','herath',
+          'wijeratne','samaraweera','gunawardena','karunathilake','samarasinghe',
+          'wickramaratne','amarasinghe','ranasinghe','seneviratne','premadasa',
+        ];
+        const lowerName = name.toLowerCase();
+        if (!result.country && sriLankanSurnames.some(s => lowerName.includes(s))) {
+          result.country = 'Sri Lanka';
+        }
       }
     }
 

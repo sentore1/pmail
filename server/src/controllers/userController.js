@@ -5,7 +5,7 @@ export const searchUsers = async (req, res) => {
     const { query } = req.query;
     const userId = req.user.id;
 
-    // Require at least 2 chars to prevent full-directory dumps
+    // Require at least 2 chars to prevent full-directory dumps on search
     if (!query || query.trim().length < 2) {
       return res.json({ users: [] });
     }
@@ -48,6 +48,39 @@ export const searchUsers = async (req, res) => {
   } catch (error) {
     console.error('Search users error:', error);
     res.status(500).json({ error: 'Failed to search users' });
+  }
+};
+
+// Return ALL users on the platform (except yourself) — used by the "All People" directory
+export const getAllUsers = async (req, res) => {
+  try {
+    const userId = req.user.id;
+
+    const users = await prisma.user.findMany({
+      where: { id: { not: userId } },
+      select: {
+        id: true, name: true, email: true,
+        country: true, knoccPrice: true, verified: true,
+      },
+      orderBy: { name: 'asc' },
+    });
+
+    // Mark which are already contacts
+    const contactRows = await prisma.contact.findMany({
+      where: { userId },
+      select: { contactId: true },
+    });
+    const contactIdSet = new Set(contactRows.map((c) => c.contactId));
+
+    const result = users.map((u) => ({
+      ...u,
+      isContact: contactIdSet.has(u.id),
+    }));
+
+    res.json({ users: result });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ error: 'Failed to get users' });
   }
 };
 

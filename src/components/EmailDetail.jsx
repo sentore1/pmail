@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp } from 'lucide-react'
+import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react'
 import DOMPurify from 'dompurify'
-import { knoccAPI, userAPI, emailAPI } from '../services/api'
+import { knoccAPI, userAPI, emailAPI, walletAPI } from '../services/api'
 
 // Instagram/Twitter-style verification badge
 const VerifiedBadge = ({ className = "w-4 h-4" }) => (
@@ -10,7 +10,7 @@ const VerifiedBadge = ({ className = "w-4 h-4" }) => (
   </svg>
 )
 
-function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }) {
+function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, onApproved }) {
   const isRequestView = viewType === 'knocc-requests'
   const isBinView = viewType === 'bin'
 
@@ -23,9 +23,12 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
   const [selectedPerson, setSelectedPerson] = useState(null)
   const [knoccReason, setKnoccReason] = useState('')
   const [actionError, setActionError] = useState('')
+  const [walletBalance, setWalletBalance] = useState(null)
   // IDs of users we've already sent a Knocc request to (or are contacts with)
   const [sentKnoccIds, setSentKnoccIds] = useState(new Set())
   const [contactIds, setContactIds] = useState(new Set())
+  const [peopleSearch, setPeopleSearch] = useState('')
+  const [showSenderInfo, setShowSenderInfo] = useState(false)
 
   // Thread expand state — which message IDs are open
   const [expandedIds, setExpandedIds] = useState(() => {
@@ -49,15 +52,19 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
 
   const fetchPeople = async () => {
     try {
-      const [usersRes, contactsRes, sentRes] = await Promise.all([
-        userAPI.searchUsers(''),
+      const [usersRes, contactsRes, sentRes, balanceRes] = await Promise.all([
+        userAPI.getAllUsers(),
         userAPI.getContacts(),
         knoccAPI.getSentRequests(),
+        walletAPI.getBalance(),
       ])
-      
+
+      if (balanceRes.walletBalance !== undefined) {
+        setWalletBalance(balanceRes.walletBalance)
+      }
+
       if (usersRes.users) {
         const approved = contactsRes.contacts || []
-        // Split into active contacts and expired ones
         const activeContacts = approved.filter(c => !c.isExpired)
         const expiredContacts = approved.filter(c => c.isExpired)
 
@@ -67,14 +74,10 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
         const sentIds = new Set(sent.map(r => r.recipientId))
 
         setContactIds(activeIds)
-        // Expired contacts go back into the "needs re-knocc" pool — remove from sentIds if expired
         expiredIds.forEach(id => sentIds.delete(id))
         setSentKnoccIds(sentIds)
         setWhoYouKnowPeople(activeContacts.slice(0, 2))
-        // All people: non-active contacts + expired contacts (they can be re-knocced)
         const allUserIds = new Set(usersRes.users.map(u => u.id))
-        // Merge expired contacts back into the all-people list with their expiry flag
-        const expiredInAll = expiredContacts.filter(c => !allUserIds.has(c.id))
         setAllPeople([
           ...expiredContacts.map(c => ({ ...c, _expired: true })),
           ...usersRes.users.filter(u => !activeIds.has(u.id)),
@@ -120,12 +123,16 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
     setActionError('')
     setLoading(true)
     try {
-      await knoccAPI.respondToRequest(email.id, 'approve')
+      const result = await knoccAPI.respondToRequest(email.id, 'approve')
+      // Close the request view first
       onClose()
       if (onRefresh) onRefresh()
+      // Navigate to inbox and open compose to the sender
+      if (result?.sender && onApproved) {
+        onApproved(result.sender)
+      }
     } catch (err) {
       setActionError(err.message || 'Failed to approve request')
-    } finally {
       setLoading(false)
     }
   }
@@ -136,11 +143,11 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
     setLoading(true)
     try {
       await knoccAPI.respondToRequest(email.id, 'decline')
+      // Close first so the stale item disappears immediately, then refresh
       onClose()
       if (onRefresh) onRefresh()
     } catch (err) {
       setActionError(err.message || 'Failed to decline request')
-    } finally {
       setLoading(false)
     }
   }
@@ -165,7 +172,18 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
   }
 
   if (!email && isRequestView) {
-    const displayedPeople = peopleTab === 'who-you-know' ? whoYouKnowPeople : allPeople
+    const filterPeople = (list) => {
+      if (!peopleSearch.trim()) return list
+      const q = peopleSearch.toLowerCase()
+      return list.filter(
+        (p) =>
+          (p.name || '').toLowerCase().includes(q) ||
+          (p.email || '').toLowerCase().includes(q) ||
+          (p.profession || '').toLowerCase().includes(q) ||
+          (p.country || '').toLowerCase().includes(q)
+      )
+    }
+    const displayedPeople = filterPeople(peopleTab === 'who-you-know' ? whoYouKnowPeople : allPeople)
 
     return (
       <div className="flex-1 flex flex-col bg-white overflow-y-auto">
@@ -177,6 +195,8 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
             <input
               type="text"
               placeholder="Search by name, email, or profession..."
+              value={peopleSearch}
+              onChange={(e) => setPeopleSearch(e.target.value)}
               className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
             />
           </div>
@@ -268,9 +288,105 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
             })}
           </div>
           {displayedPeople.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-6">No people found</p>
+            <p className="text-sm text-gray-400 text-center py-6">
+              {peopleSearch.trim() ? 'No people found matching your search' : 'No people found'}
+            </p>
           )}
         </div>
+
+        {/* ── Knocc modal — must be inside this early-return block ────────── */}
+        {showKnoccModal && selectedPerson && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                <div>
+                  <h2 className="text-base font-semibold text-gray-900">Send Knocc Request</h2>
+                  <p className="text-xs text-gray-500 mt-0.5">to {selectedPerson.name}</p>
+                </div>
+                <button
+                  onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason(''); setActionError('') }}
+                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <X className="w-4 h-4 text-gray-500" />
+                </button>
+              </div>
+
+              <div className="p-5 space-y-4">
+                {/* Recipient summary */}
+                <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                  <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
+                    {(selectedPerson.name || '?').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-gray-900">{selectedPerson.name}</p>
+                    <p className="text-xs text-gray-500">{selectedPerson.email}</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="flex items-center gap-1">
+                      <DollarSign className="w-3.5 h-3.5 text-gray-500" />
+                      <span className="text-sm font-bold text-gray-900">{selectedPerson.knoccPrice}</span>
+                    </div>
+                    <p className="text-xs text-gray-400">knocc fee</p>
+                  </div>
+                </div>
+
+                {/* Wallet balance check */}
+                {walletBalance !== null && (
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
+                    walletBalance >= selectedPerson.knoccPrice
+                      ? 'bg-green-50 text-green-700'
+                      : 'bg-red-50 text-red-700'
+                  }`}>
+                    <span>Your balance: <strong>${walletBalance.toFixed(2)}</strong></span>
+                    {walletBalance < selectedPerson.knoccPrice && (
+                      <span className="text-xs font-medium">
+                        Need ${(selectedPerson.knoccPrice - walletBalance).toFixed(2)} more — add funds from Wallet
+                      </span>
+                    )}
+                  </div>
+                )}
+
+                {/* Reason */}
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
+                    Reason for contact <span className="text-red-500">*</span>
+                  </label>
+                  <textarea
+                    value={knoccReason}
+                    onChange={e => setKnoccReason(e.target.value)}
+                    placeholder="Why do you want to contact this person?"
+                    rows={3}
+                    autoFocus
+                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
+                  />
+                </div>
+
+                {actionError && (
+                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{actionError}</p>
+                )}
+              </div>
+
+              <div className="px-5 pb-5 flex gap-3">
+                <button
+                  onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason(''); setActionError('') }}
+                  className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleSendKnocc}
+                  disabled={loading || !knoccReason.trim() || (walletBalance !== null && walletBalance < selectedPerson.knoccPrice)}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
+                >
+                  {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                  {loading ? 'Sending…' : walletBalance !== null && walletBalance < selectedPerson.knoccPrice
+                    ? 'Insufficient balance'
+                    : `Send Knocc ($${selectedPerson.knoccPrice})`}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
@@ -364,6 +480,14 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward }
                 )}
               </div>
             </div>
+
+            {/* Error display */}
+            {actionError && (
+              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600 flex items-center gap-2">
+                <XCircle className="w-4 h-4 flex-shrink-0" />
+                {actionError}
+              </div>
+            )}
 
             {email.status === 'PENDING' && (
               <div className="flex gap-2">

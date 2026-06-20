@@ -1,26 +1,67 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { ArrowLeft, Eye, EyeOff, Loader2, Check, X, AtSign } from 'lucide-react'
+import { ArrowLeft, Eye, EyeOff, Loader2, Check, X } from 'lucide-react'
 import { authAPI } from '../services/api'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
 const COUNTRY_DIAL = {
-  'United States': '+1', 'Canada': '+1', 'United Kingdom': '+44',
-  'Australia': '+61', 'Germany': '+49', 'France': '+33', 'Spain': '+34',
-  'Italy': '+39', 'Netherlands': '+31', 'Sweden': '+46', 'Norway': '+47',
-  'Denmark': '+45', 'Finland': '+358', 'Switzerland': '+41', 'Austria': '+43',
-  'Belgium': '+32', 'Ireland': '+353', 'Poland': '+48', 'Portugal': '+351',
-  'Greece': '+30', 'Japan': '+81', 'South Korea': '+82', 'China': '+86',
-  'India': '+91', 'Singapore': '+65', 'Malaysia': '+60', 'Thailand': '+66',
-  'Indonesia': '+62', 'Philippines': '+63', 'Vietnam': '+84',
-  'New Zealand': '+64', 'Mexico': '+52', 'Brazil': '+55', 'Argentina': '+54',
-  'Chile': '+56', 'Colombia': '+57', 'South Africa': '+27', 'Nigeria': '+234',
-  'Kenya': '+254', 'Egypt': '+20', 'United Arab Emirates': '+971',
-  'Saudi Arabia': '+966', 'Israel': '+972', 'Turkey': '+90', 'Russia': '+7',
-  'Ukraine': '+380',
+  'Afghanistan': '+93', 'Albania': '+355', 'Algeria': '+213', 'Andorra': '+376',
+  'Angola': '+244', 'Antigua and Barbuda': '+1-268', 'Argentina': '+54',
+  'Armenia': '+374', 'Australia': '+61', 'Austria': '+43', 'Azerbaijan': '+994',
+  'Bahamas': '+1-242', 'Bahrain': '+973', 'Bangladesh': '+880', 'Barbados': '+1-246',
+  'Belarus': '+375', 'Belgium': '+32', 'Belize': '+501', 'Benin': '+229',
+  'Bhutan': '+975', 'Bolivia': '+591', 'Bosnia and Herzegovina': '+387',
+  'Botswana': '+267', 'Brazil': '+55', 'Brunei': '+673', 'Bulgaria': '+359',
+  'Burkina Faso': '+226', 'Burundi': '+257', 'Cambodia': '+855', 'Cameroon': '+237',
+  'Canada': '+1', 'Cape Verde': '+238', 'Central African Republic': '+236',
+  'Chad': '+235', 'Chile': '+56', 'China': '+86', 'Colombia': '+57',
+  'Comoros': '+269', 'Congo': '+242', 'Costa Rica': '+506', 'Croatia': '+385',
+  'Cuba': '+53', 'Cyprus': '+357', 'Czech Republic': '+420', 'Denmark': '+45',
+  'Djibouti': '+253', 'Dominica': '+1-767', 'Dominican Republic': '+1-809',
+  'DR Congo': '+243', 'Ecuador': '+593', 'Egypt': '+20', 'El Salvador': '+503',
+  'Equatorial Guinea': '+240', 'Eritrea': '+291', 'Estonia': '+372',
+  'Eswatini': '+268', 'Ethiopia': '+251', 'Fiji': '+679', 'Finland': '+358',
+  'France': '+33', 'Gabon': '+241', 'Gambia': '+220', 'Georgia': '+995',
+  'Germany': '+49', 'Ghana': '+233', 'Greece': '+30', 'Grenada': '+1-473',
+  'Guatemala': '+502', 'Guinea': '+224', 'Guinea-Bissau': '+245', 'Guyana': '+592',
+  'Haiti': '+509', 'Honduras': '+504', 'Hungary': '+36', 'Iceland': '+354',
+  'India': '+91', 'Indonesia': '+62', 'Iran': '+98', 'Iraq': '+964',
+  'Ireland': '+353', 'Israel': '+972', 'Italy': '+39', 'Ivory Coast': '+225',
+  'Jamaica': '+1-876', 'Japan': '+81', 'Jordan': '+962', 'Kazakhstan': '+7',
+  'Kenya': '+254', 'Kiribati': '+686', 'Kuwait': '+965', 'Kyrgyzstan': '+996',
+  'Laos': '+856', 'Latvia': '+371', 'Lebanon': '+961', 'Lesotho': '+266',
+  'Liberia': '+231', 'Libya': '+218', 'Liechtenstein': '+423', 'Lithuania': '+370',
+  'Luxembourg': '+352', 'Madagascar': '+261', 'Malawi': '+265', 'Malaysia': '+60',
+  'Maldives': '+960', 'Mali': '+223', 'Malta': '+356', 'Marshall Islands': '+692',
+  'Mauritania': '+222', 'Mauritius': '+230', 'Mexico': '+52',
+  'Micronesia': '+691', 'Moldova': '+373', 'Monaco': '+377', 'Mongolia': '+976',
+  'Montenegro': '+382', 'Morocco': '+212', 'Mozambique': '+258', 'Myanmar': '+95',
+  'Namibia': '+264', 'Nauru': '+674', 'Nepal': '+977', 'Netherlands': '+31',
+  'New Zealand': '+64', 'Nicaragua': '+505', 'Niger': '+227', 'Nigeria': '+234',
+  'North Korea': '+850', 'North Macedonia': '+389', 'Norway': '+47', 'Oman': '+968',
+  'Pakistan': '+92', 'Palau': '+680', 'Palestine': '+970', 'Panama': '+507',
+  'Papua New Guinea': '+675', 'Paraguay': '+595', 'Peru': '+51',
+  'Philippines': '+63', 'Poland': '+48', 'Portugal': '+351', 'Qatar': '+974',
+  'Romania': '+40', 'Russia': '+7', 'Rwanda': '+250',
+  'Saint Kitts and Nevis': '+1-869', 'Saint Lucia': '+1-758',
+  'Saint Vincent and the Grenadines': '+1-784', 'Samoa': '+685',
+  'San Marino': '+378', 'Saudi Arabia': '+966', 'Senegal': '+221', 'Serbia': '+381',
+  'Seychelles': '+248', 'Sierra Leone': '+232', 'Singapore': '+65',
+  'Slovakia': '+421', 'Slovenia': '+386', 'Solomon Islands': '+677',
+  'Somalia': '+252', 'South Africa': '+27', 'South Korea': '+82',
+  'South Sudan': '+211', 'Spain': '+34', 'Sri Lanka': '+94', 'Sudan': '+249',
+  'Suriname': '+597', 'Sweden': '+46', 'Switzerland': '+41', 'Syria': '+963',
+  'Taiwan': '+886', 'Tajikistan': '+992', 'Tanzania': '+255', 'Thailand': '+66',
+  'Timor-Leste': '+670', 'Togo': '+228', 'Tonga': '+676',
+  'Trinidad and Tobago': '+1-868', 'Tunisia': '+216', 'Turkey': '+90',
+  'Turkmenistan': '+993', 'Tuvalu': '+688', 'Uganda': '+256', 'Ukraine': '+380',
+  'United Arab Emirates': '+971', 'United Kingdom': '+44', 'United States': '+1',
+  'Uruguay': '+598', 'Uzbekistan': '+998', 'Vanuatu': '+678', 'Vatican City': '+39',
+  'Venezuela': '+58', 'Vietnam': '+84', 'Yemen': '+967', 'Zambia': '+260',
+  'Zimbabwe': '+263',
 }
 
-const COUNTRIES = Object.keys(COUNTRY_DIAL).concat(['Czech Republic', 'Hungary', 'Romania', 'Other']).sort()
+const COUNTRIES = Object.keys(COUNTRY_DIAL).sort()
 
 function OnboardingFlow({ onComplete }) {
   const [step, setStep] = useState(1)
@@ -36,15 +77,61 @@ function OnboardingFlow({ onComplete }) {
   const [username, setUsername] = useState('')
   const [usernameStatus, setUsernameStatus] = useState('idle') // idle | checking | available | taken
   const [usernameSuggestions, setUsernameSuggestions] = useState([])
+  const [nameSuggestions, setNameSuggestions] = useState([]) // derived from first/last name
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const usernameTimer = useRef(null)
+
+  // ── Generate username candidates from first + last name ───────────────────
+  const buildNameSuggestions = (first, last) => {
+    const f = first.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+    const l = last.trim().toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (!f) return []
+    const candidates = []
+    if (f && l) {
+      candidates.push(`${f}.${l}`)       // john.smith
+      candidates.push(`${f[0]}${l}`)     // jsmith
+    } else {
+      candidates.push(f)
+    }
+    return [...new Set(candidates)]
+  }
 
   // Step 3 — profile details (pre-filled by engine)
   const [profile, setProfile] = useState({ phoneNumber: '', age: '', gender: '', country: '', knoccPrice: '1' })
 
   const [engineStatus, setEngineStatus] = useState('idle')
   const engineFired = useRef(false)
+  const geoFetched  = useRef(false)
+
+  // ── Pre-fetch location from IP on mount — sets country+dial before step 3 ─
+  // Uses /scrape-user-data with no name so IP geo runs immediately
+  useEffect(() => {
+    if (geoFetched.current) return
+    geoFetched.current = true
+    const prefetch = async () => {
+      try {
+        const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null
+        const language = navigator.language || null
+        const r = await fetch(`${API_URL}/intelligence/scrape-user-data`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name: '', email: '', timezone, language }),
+        })
+        if (r.ok) {
+          const d = (await r.json())?.data || {}
+          if (d.country) {
+            setProfile(prev => ({
+              ...prev,
+              country:     prev.country     || d.country,
+              phoneNumber: prev.phoneNumber || d.dialCode || '',
+            }))
+          }
+        }
+      } catch { /* silent */ }
+    }
+    prefetch()
+  }, [])
 
   // ── Fire intelligence engine when name is typed ────────────────────────────
   useEffect(() => {
@@ -71,24 +158,32 @@ function OnboardingFlow({ onComplete }) {
       })
       if (r.ok) {
         const d = (await r.json())?.data || {}
-        if (d.country)  gathered.country  = d.country
-        if (d.dialCode) gathered.dialCode = d.dialCode
-        if (d.gender)   gathered.gender   = d.gender
+        if (d.country)  gathered.country        = d.country
+        if (d.dialCode) gathered.dialCode        = d.dialCode
+        if (d.gender)   gathered.gender          = d.gender
+        if (d.age)      gathered.age             = d.age
+        if (d.signals?.source) gathered.source   = d.signals.source
+        console.debug('[pmail] engine result:', d.signals?.source, d)
       }
     } catch { /* silent */ }
 
-    if (!gathered.country) {
-      try {
-        const r = await fetch(`${API_URL}/intelligence/geoip`)
-        if (r.ok) { const g = await r.json(); if (g.country) gathered.country = g.country }
-      } catch { /* silent */ }
-    }
-
     setProfile(prev => {
       const next = { ...prev }
-      if (gathered.country && !prev.country) next.country = gathered.country
-      if (gathered.gender  && !prev.gender)  next.gender  = gathered.gender
-      if (!prev.phoneNumber) {
+      const isPublicFigure = gathered.source === 'public_figure'
+
+      // Public figure data always wins — it's more accurate than IP for that person
+      // For regular users, only fill if not already set by prefetch
+      if (gathered.country && (isPublicFigure || !prev.country)) {
+        next.country = gathered.country
+      }
+      if (gathered.gender && (isPublicFigure || !prev.gender)) {
+        next.gender = gathered.gender
+      }
+      if (gathered.age && (isPublicFigure || !prev.age)) {
+        next.age = String(gathered.age)
+      }
+      // Phone: always update to match the detected country's dial code
+      if (isPublicFigure || !prev.phoneNumber) {
         const dial = gathered.dialCode || (gathered.country ? COUNTRY_DIAL[gathered.country] : null)
         if (dial) next.phoneNumber = dial
       }
@@ -126,6 +221,12 @@ function OnboardingFlow({ onComplete }) {
 
     if (step === 1) {
       if (!firstName.trim() || !lastName.trim()) { setError('Please enter your first and last name'); return }
+      // Pre-fill username from name
+      const suggestions = buildNameSuggestions(firstName, lastName)
+      setNameSuggestions(suggestions)
+      if (suggestions.length > 0 && !username) {
+        setUsername(suggestions[0])
+      }
       setStep(2)
       return
     }
@@ -170,8 +271,8 @@ function OnboardingFlow({ onComplete }) {
     }
   }
 
-  const inputCls = 'w-full px-4 py-3 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base bg-white'
-  const inputSmCls = 'w-full px-4 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm bg-white'
+  const inputCls = 'w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm bg-white'
+  const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm bg-white'
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-8">
@@ -182,7 +283,7 @@ function OnboardingFlow({ onComplete }) {
           <div className="rounded-3xl p-8">
             {step > 1 && (
               <button onClick={() => { setError(''); setStep(s => s - 1) }}
-                className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm mb-4">
+                className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-4">
                 <ArrowLeft className="w-4 h-4" /> Back
               </button>
             )}
@@ -211,11 +312,6 @@ function OnboardingFlow({ onComplete }) {
                         <Loader2 className="w-3 h-3 animate-spin" /> Setting up your profile…
                       </span>
                     )}
-                    {engineStatus === 'done' && (
-                      <span className="text-xs text-green-500 flex items-center gap-1">
-                        <Check className="w-3 h-3" /> Profile ready
-                      </span>
-                    )}
                   </div>
                 </>
               )}
@@ -225,36 +321,39 @@ function OnboardingFlow({ onComplete }) {
                 <>
                   {/* Username picker */}
                   <div>
-                    <label className="block text-sm text-gray-700 mb-1.5">Choose your username</label>
-                    <div className="relative">
+                    {/* Name-based suggestions — right-aligned next to nothing (no label) */}
+                    {nameSuggestions.length > 0 && (
+                      <div className="flex gap-1.5 mb-2">
+                        {nameSuggestions.map(s => (
+                          <button key={s} type="button"
+                            onClick={() => setUsername(s)}
+                            className={`px-2.5 py-1 text-xs rounded-lg transition-colors ${
+                              username === s
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                            }`}>
+                            {s}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 bg-white overflow-hidden">
                       <input
                         type="text"
                         value={username}
                         onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
                         placeholder="yourname"
                         autoFocus
-                        className={`${inputCls} pr-10`}
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
                       />
-                      <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <span className="text-gray-400 text-sm pr-2 whitespace-nowrap select-none">@pryro.com</span>
+                      <div className="pr-3">
                         {usernameStatus === 'checking' && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
                         {usernameStatus === 'available' && <Check className="w-4 h-4 text-green-500" />}
                         {usernameStatus === 'taken' && <X className="w-4 h-4 text-red-500" />}
                       </div>
                     </div>
-
-                    {/* Live email preview */}
-                    {username && (
-                      <div className={`mt-2 flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-lg ${
-                        usernameStatus === 'available' ? 'bg-green-50 text-green-700' :
-                        usernameStatus === 'taken'     ? 'bg-red-50 text-red-700' :
-                        'bg-gray-50 text-gray-600'
-                      }`}>
-                        <AtSign className="w-3.5 h-3.5 flex-shrink-0" />
-                        <span className="font-medium">{username}@pryro.com</span>
-                        {usernameStatus === 'available' && <span className="ml-auto text-xs">Available ✓</span>}
-                        {usernameStatus === 'taken'     && <span className="ml-auto text-xs">Taken</span>}
-                      </div>
-                    )}
 
                     {/* Suggestions when taken */}
                     {usernameStatus === 'taken' && usernameSuggestions.length > 0 && (
@@ -271,22 +370,26 @@ function OnboardingFlow({ onComplete }) {
                         </div>
                       </div>
                     )}
+
                     <p className="mt-1.5 text-xs text-gray-400">Only letters, numbers, . _ - allowed</p>
                   </div>
 
                   {/* Password */}
-                  <div className="relative">
-                    <input type={showPassword ? 'text' : 'password'} value={password}
-                      onChange={e => setPassword(e.target.value)}
-                      placeholder="Create a password" className={inputCls} />
-                    <button type="button" onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500">
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
-                    </button>
+                  <div className="flex flex-col gap-1.5">
+                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 bg-white overflow-hidden">
+                      <input type={showPassword ? 'text' : 'password'} value={password}
+                        onChange={e => setPassword(e.target.value)}
+                        placeholder="Create a password"
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0" />
+                      <button type="button" onClick={() => setShowPassword(!showPassword)}
+                        className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0">
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    <input type={showPassword ? 'text' : 'password'} value={confirmPassword}
+                      onChange={e => setConfirmPassword(e.target.value)}
+                      placeholder="Confirm password" className={inputCls} />
                   </div>
-                  <input type={showPassword ? 'text' : 'password'} value={confirmPassword}
-                    onChange={e => setConfirmPassword(e.target.value)}
-                    placeholder="Confirm password" className={inputCls} />
                   <p className="text-xs text-gray-500">Use 8 or more characters</p>
                 </>
               )}
@@ -294,15 +397,6 @@ function OnboardingFlow({ onComplete }) {
               {/* Step 3: Profile details */}
               {step === 3 && (
                 <>
-                  {/* Show the final email */}
-                  <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-sm flex items-center gap-2">
-                    <AtSign className="w-4 h-4 text-blue-500 flex-shrink-0" />
-                    <div>
-                      <p className="text-xs text-blue-500 font-medium">Your Pmail address</p>
-                      <p className="text-blue-700 font-semibold">{username}@pryro.com</p>
-                    </div>
-                  </div>
-
                   <div className="grid grid-cols-2 gap-4">
                     <div>
                       <label className="block text-sm text-gray-700 mb-1">Phone (optional)</label>
@@ -351,7 +445,7 @@ function OnboardingFlow({ onComplete }) {
                 </>
               )}
 
-              <div className="flex justify-end pt-4">
+              <div className="flex justify-end pt-1">
                 <button type="submit" disabled={loading || (step === 2 && usernameStatus === 'checking')}
                   className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2">
                   {loading && <Loader2 className="w-4 h-4 animate-spin" />}

@@ -25,14 +25,14 @@ function Sidebar({
       <button
         onClick={onClick || (() => onNavigate(view))}
         className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-sm ${
-          active ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:bg-gray-50'
+          active ? 'bg-gray-100 text-gray-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'
         }`}
       >
         <Icon className="w-4 h-4 flex-shrink-0" />
         <span>{label}</span>
         {badge > 0 && (
           <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium ${
-            active ? 'bg-blue-600 text-white' : 'bg-gray-200 text-gray-600'
+            active ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-600'
           }`}>
             {badge}
           </span>

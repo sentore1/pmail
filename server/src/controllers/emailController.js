@@ -79,6 +79,33 @@ export const sendEmail = async (req, res) => {
       for (const recipientEmail of emails) {
         const user = await prisma.user.findUnique({ where: { email: recipientEmail } });
         if (user) {
+          // Check if contact relationship exists and is not expired
+          if (user.id !== senderId) {
+            const contact = await prisma.contact.findUnique({
+              where: { userId_contactId: { userId: senderId, contactId: user.id } },
+            });
+            if (!contact) {
+              unknownEmails.push(recipientEmail);
+              continue; // not a contact — skip
+            }
+            // Check expiry against recipient's chatExpiryMonths setting
+            const recipient = await prisma.user.findUnique({
+              where: { id: user.id },
+              select: { chatExpiryMonths: true },
+            });
+            if (recipient.chatExpiryMonths !== null) {
+              const lastActivity = contact.lastEmailAt || contact.approvedAt;
+              const expiry = new Date(lastActivity);
+              expiry.setMonth(expiry.getMonth() + recipient.chatExpiryMonths);
+              if (new Date() > expiry) {
+                return res.status(403).json({
+                  error: `Your chat access to ${recipientEmail} has expired. Send a new Knocc request to reconnect.`,
+                  expired: true,
+                  recipientEmail,
+                });
+              }
+            }
+          }
           recipientRows.push({ emailId: email.id, recipientId: user.id, type });
         } else {
           unknownEmails.push(recipientEmail);

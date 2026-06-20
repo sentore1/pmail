@@ -208,6 +208,13 @@ export const knoccAPI = {
 
 // User API
 export const userAPI = {
+  getAllUsers: async () => {
+    const response = await fetch(`${API_URL}/users/all`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   searchUsers: async (query) => {
     const response = await fetch(`${API_URL}/users/search?query=${encodeURIComponent(query)}`, {
       headers: getAuthHeaders(),

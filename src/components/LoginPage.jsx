@@ -124,7 +124,7 @@ function LoginPage({ onLogin }) {
           {step > 1 && (
             <button
               onClick={handleBack}
-              className="flex items-center gap-1 text-blue-600 hover:text-blue-700 text-sm mb-4"
+              className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-4"
             >
               <ArrowLeft className="w-4 h-4" />
               Back
@@ -158,7 +158,7 @@ function LoginPage({ onLogin }) {
                   value={formData.email}
                   onChange={handleChange}
                   required
-                  className="w-full px-4 py-3 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base"
+                  className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                   placeholder={isLogin ? 'Username or email' : 'Email'}
                   autoFocus
                 />
@@ -188,7 +188,7 @@ function LoginPage({ onLogin }) {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base"
+                      className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                       placeholder="First and last name"
                       autoFocus
                     />
@@ -196,23 +196,23 @@ function LoginPage({ onLogin }) {
                 )}
 
                 <div>
-                  <div className="relative">
+                  <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 bg-white overflow-hidden">
                     <input
                       type={showPassword ? 'text' : 'password'}
                       name="password"
                       value={formData.password}
                       onChange={handleChange}
                       required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-base"
+                      className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
                       placeholder={isLogin ? 'Enter your password' : 'Create a password'}
                       autoFocus={isLogin}
                     />
                     <button
                       type="button"
                       onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                      className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0"
                     >
-                      {showPassword ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
+                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                     </button>
                   </div>
                   {!isLogin && (
@@ -237,7 +237,7 @@ function LoginPage({ onLogin }) {
                       name="phoneNumber"
                       value={formData.phoneNumber}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                       placeholder="+1234567890"
                     />
                   </div>
@@ -248,7 +248,7 @@ function LoginPage({ onLogin }) {
                       name="age"
                       value={formData.age}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                       placeholder="25"
                     />
                   </div>
@@ -261,7 +261,7 @@ function LoginPage({ onLogin }) {
                       name="gender"
                       value={formData.gender}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                     >
                       <option value="">Select</option>
                       <option value="male">Male</option>
@@ -275,7 +275,7 @@ function LoginPage({ onLogin }) {
                       name="country"
                       value={formData.country}
                       onChange={handleChange}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                     >
                       <option value="">Select Country</option>
                       <option value="United States">United States</option>
@@ -343,7 +343,7 @@ function LoginPage({ onLogin }) {
                     onChange={handleChange}
                     min="1"
                     step="0.01"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                    className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
                     placeholder="1.00"
                   />
                   <p className="mt-1 text-xs text-gray-600">

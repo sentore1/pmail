@@ -116,7 +116,7 @@ function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
           <div className="space-y-6">
             {/* User Profile Card */}
             {user && (
-              <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg p-4 border border-blue-100">
+              <div className="rounded-lg p-4 border border-gray-200">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                     {settings.name.charAt(0).toUpperCase()}

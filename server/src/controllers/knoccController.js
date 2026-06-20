@@ -14,16 +14,37 @@ export const sendKnoccRequest = async (req, res) => {
       return res.status(404).json({ error: 'Recipient not found' });
     }
 
-    // Check if already connected
-    const existingContact = await prisma.contact.findFirst({
-      where: {
-        userId: senderId,
-        contactId: recipient.id,
-      },
+    // Check if already connected (and not expired)
+    const existingContact = await prisma.contact.findUnique({
+      where: { userId_contactId: { userId: senderId, contactId: recipient.id } },
     });
 
     if (existingContact) {
-      return res.status(400).json({ error: 'Already connected with this user' });
+      // Check if the contact is expired under recipient's settings
+      const recipientSettings = await prisma.user.findUnique({
+        where: { id: recipient.id },
+        select: { chatExpiryMonths: true },
+      });
+      if (recipientSettings.chatExpiryMonths !== null) {
+        const lastActivity = existingContact.lastEmailAt || existingContact.approvedAt;
+        const expiry = new Date(lastActivity);
+        expiry.setMonth(expiry.getMonth() + recipientSettings.chatExpiryMonths);
+        if (new Date() <= expiry) {
+          return res.status(400).json({ error: 'Already connected with this user' });
+        }
+        // Expired — remove old contact so they can knocc again
+        await prisma.contact.deleteMany({
+          where: {
+            OR: [
+              { userId: senderId, contactId: recipient.id },
+              { userId: recipient.id, contactId: senderId },
+            ],
+          },
+        });
+      } else {
+        // Never expires
+        return res.status(400).json({ error: 'Already connected with this user' });
+      }
     }
 
     // Check if blocked
@@ -190,28 +211,29 @@ export const respondToRequest = async (req, res) => {
       // Update request status
       await prisma.knoccRequest.update({
         where: { id },
-        data: {
-          status: 'APPROVED',
-          respondedAt: new Date(),
-        },
+        data: { status: 'APPROVED', respondedAt: new Date() },
       });
 
-      // Add to contacts bidirectionally — skip if already exists
-      await prisma.contact.createMany({
-        data: [
-          { userId, contactId: request.senderId },
-          { userId: request.senderId, contactId: userId },
-        ],
-        skipDuplicates: true,
-      });
+      // Add to contacts bidirectionally — upsert handles duplicates (SQLite doesn't support skipDuplicates)
+      await Promise.all([
+        prisma.contact.upsert({
+          where: { userId_contactId: { userId, contactId: request.senderId } },
+          create: { userId, contactId: request.senderId },
+          update: { approvedAt: new Date(), lastEmailAt: null }, // reset expiry timer
+        }),
+        prisma.contact.upsert({
+          where: { userId_contactId: { userId: request.senderId, contactId: userId } },
+          create: { userId: request.senderId, contactId: userId },
+          update: { approvedAt: new Date(), lastEmailAt: null },
+        }),
+      ]);
 
-      // Add payment to recipient's wallet
+      // Credit recipient's wallet
       await prisma.user.update({
         where: { id: userId },
         data: { walletBalance: { increment: request.paymentAmount } },
       });
 
-      // Create transaction
       await prisma.transaction.create({
         data: {
           userId,
@@ -221,7 +243,13 @@ export const respondToRequest = async (req, res) => {
         },
       });
 
-      res.json({ message: 'Request approved successfully' });
+      // Return sender info so frontend can open compose window
+      const sender = await prisma.user.findUnique({
+        where: { id: request.senderId },
+        select: { id: true, name: true, email: true },
+      });
+
+      res.json({ message: 'Request approved successfully', sender });
     } else if (action === 'decline') {
       // Atomic: update status + refund in a single transaction
       await prisma.$transaction([
