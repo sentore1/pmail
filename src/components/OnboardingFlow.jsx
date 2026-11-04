@@ -105,7 +105,7 @@ function OnboardingFlow({ onComplete }) {
   const geoFetched  = useRef(false)
 
   // ── Pre-fetch location from IP on mount — sets country+dial before step 3 ─
-  // Uses /scrape-user-data with no name so IP geo runs immediately
+  // Uses /scrape-user-data with no name so timezone detection runs immediately
   useEffect(() => {
     if (geoFetched.current) return
     geoFetched.current = true
@@ -113,6 +113,7 @@ function OnboardingFlow({ onComplete }) {
       try {
         const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || null
         const language = navigator.language || null
+        console.debug('[pmail] prefetch - TZ:', timezone, 'Lang:', language)
         const r = await fetch(`${API_URL}/intelligence/scrape-user-data`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -120,15 +121,18 @@ function OnboardingFlow({ onComplete }) {
         })
         if (r.ok) {
           const d = (await r.json())?.data || {}
-          if (d.country) {
+          console.debug('[pmail] prefetch result:', d)
+          if (d.country || d.dialCode) {
             setProfile(prev => ({
               ...prev,
-              country:     prev.country     || d.country,
-              phoneNumber: prev.phoneNumber || d.dialCode || '',
+              country:     d.country || prev.country,
+              phoneNumber: d.dialCode || prev.phoneNumber,
             }))
           }
         }
-      } catch { /* silent */ }
+      } catch (err) { 
+        console.error('[pmail] prefetch error:', err)
+      }
     }
     prefetch()
   }, [])
@@ -165,28 +169,31 @@ function OnboardingFlow({ onComplete }) {
         if (d.signals?.source) gathered.source   = d.signals.source
         console.debug('[pmail] engine result:', d.signals?.source, d)
       }
-    } catch { /* silent */ }
+    } catch (err) { 
+      console.error('[pmail] engine error:', err)
+    }
 
     setProfile(prev => {
       const next = { ...prev }
       const isPublicFigure = gathered.source === 'public_figure'
 
       // Public figure data always wins — it's more accurate than IP for that person
-      // For regular users, only fill if not already set by prefetch
-      if (gathered.country && (isPublicFigure || !prev.country)) {
+      // For regular users with name, trust timezone detection over IP-only prefetch
+      if (gathered.country) {
         next.country = gathered.country
       }
-      if (gathered.gender && (isPublicFigure || !prev.gender)) {
+      if (gathered.gender) {
         next.gender = gathered.gender
       }
-      if (gathered.age && (isPublicFigure || !prev.age)) {
+      if (gathered.age) {
         next.age = String(gathered.age)
       }
-      // Phone: always update to match the detected country's dial code
-      if (isPublicFigure || !prev.phoneNumber) {
-        const dial = gathered.dialCode || (gathered.country ? COUNTRY_DIAL[gathered.country] : null)
-        if (dial) next.phoneNumber = dial
+      // Always update phone dial code to match the detected country
+      if (gathered.dialCode) {
+        next.phoneNumber = gathered.dialCode
       }
+      
+      console.debug('[pmail] profile updated:', next)
       return next
     })
     setEngineStatus(Object.keys(gathered).length > 0 ? 'done' : 'failed')
@@ -271,8 +278,8 @@ function OnboardingFlow({ onComplete }) {
     }
   }
 
-  const inputCls = 'w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm bg-white'
-  const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm bg-white'
+  const inputCls = 'w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
+  const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
 
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-8">
@@ -294,7 +301,7 @@ function OnboardingFlow({ onComplete }) {
             {step === 3 && <p className="text-sm text-gray-600 mb-6">Almost there — fill in your profile</p>}
 
             {error && (
-              <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">{error}</div>
+              <div className="mb-4 text-sm text-red-600">{error}</div>
             )}
 
             <form onSubmit={handleNext} className="space-y-4">
@@ -304,14 +311,14 @@ function OnboardingFlow({ onComplete }) {
                 <>
                   <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
                     placeholder="First name" autoFocus className={inputCls} />
-                  <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
-                    placeholder="Last name" className={inputCls} />
-                  <div className="h-4">
-                    {engineStatus === 'running' && (
-                      <span className="text-xs text-gray-400 flex items-center gap-1">
-                        <Loader2 className="w-3 h-3 animate-spin" /> Setting up your profile…
-                      </span>
-                    )}
+                  <div className="flex items-center gap-3">
+                    <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
+                      placeholder="Last name" className={inputCls} />
+                    <button type="submit" disabled={loading}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {loading ? 'Creating account…' : 'Next'}
+                    </button>
                   </div>
                 </>
               )}
@@ -320,7 +327,7 @@ function OnboardingFlow({ onComplete }) {
               {step === 2 && (
                 <>
                   {/* Username picker */}
-                  <div>
+                  <div className="step2-container">
                     {/* Name-based suggestions — right-aligned next to nothing (no label) */}
                     {nameSuggestions.length > 0 && (
                       <div className="flex gap-1.5 mb-2">
@@ -338,7 +345,7 @@ function OnboardingFlow({ onComplete }) {
                       </div>
                     )}
 
-                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 bg-white overflow-hidden">
+                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-gray-400 bg-white overflow-hidden">
                       <input
                         type="text"
                         value={username}
@@ -376,7 +383,7 @@ function OnboardingFlow({ onComplete }) {
 
                   {/* Password */}
                   <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 bg-white overflow-hidden">
+                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-gray-400 bg-white overflow-hidden">
                       <input type={showPassword ? 'text' : 'password'} value={password}
                         onChange={e => setPassword(e.target.value)}
                         placeholder="Create a password"
@@ -390,7 +397,16 @@ function OnboardingFlow({ onComplete }) {
                       onChange={e => setConfirmPassword(e.target.value)}
                       placeholder="Confirm password" className={inputCls} />
                   </div>
-                  <p className="text-xs text-gray-500">Use 8 or more characters</p>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">Use 8 or more characters</p>
+                    </div>
+                    <button type="submit" disabled={loading || usernameStatus === 'checking'}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {loading ? 'Creating account…' : 'Next'}
+                    </button>
+                  </div>
                 </>
               )}
 
@@ -435,23 +451,22 @@ function OnboardingFlow({ onComplete }) {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-sm text-gray-700 mb-1">Knocc Price ($)</label>
-                    <input type="number" value={profile.knoccPrice}
-                      onChange={e => setProfile(p => ({ ...p, knoccPrice: e.target.value }))}
-                      min="1" step="0.01" placeholder="1.00" className={inputSmCls} />
-                    <p className="mt-1 text-xs text-gray-500">What people pay to send you a Knocc request</p>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <label className="block text-sm text-gray-700 mb-1">Knocc Price ($)</label>
+                      <input type="number" value={profile.knoccPrice}
+                        onChange={e => setProfile(p => ({ ...p, knoccPrice: e.target.value }))}
+                        min="1" step="0.01" placeholder="1.00" className={inputSmCls} />
+                      <p className="mt-1 text-xs text-gray-500">What people pay to send you a Knocc request</p>
+                    </div>
+                    <button type="submit" disabled={loading}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0 self-start mt-6">
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {loading ? 'Creating account…' : 'Create account'}
+                    </button>
                   </div>
                 </>
               )}
-
-              <div className="flex justify-end pt-1">
-                <button type="submit" disabled={loading || (step === 2 && usernameStatus === 'checking')}
-                  className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2">
-                  {loading && <Loader2 className="w-4 h-4 animate-spin" />}
-                  {loading ? 'Creating account…' : step === 3 ? 'Create account' : 'Next'}
-                </button>
-              </div>
             </form>
           </div>
 

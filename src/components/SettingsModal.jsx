@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { X, Save, Shield, UserPlus, Globe, Phone, Calendar, Users as UsersIcon, User, DollarSign, Brain, CheckCircle, Loader, RefreshCw, AlertCircle, Clock } from 'lucide-react'
+import { X, Save, Shield, UserPlus, Globe, Phone, Calendar, Users as UsersIcon, User, DollarSign, Brain, CheckCircle, Loader, RefreshCw, AlertCircle } from 'lucide-react'
 import { userAPI, googleAPI } from '../services/api'
 
 function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
@@ -116,7 +116,7 @@ function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
           <div className="space-y-6">
             {/* User Profile Card */}
             {user && (
-              <div className="rounded-lg p-4 border border-gray-200">
+              <div className="rounded-lg p-4">
                 <div className="flex items-center gap-3">
                   <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-semibold text-lg">
                     {settings.name.charAt(0).toUpperCase()}
@@ -204,14 +204,13 @@ function SettingsModal({ onClose, user, onLogout, onUpdate, onShowInvite }) {
             {/* Chat Expiry */}
             <div>
               <h3 className="text-lg font-semibold text-gray-800 mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5 text-blue-600" />
                 Chat Expiry
               </h3>
 
               <div className="ml-7 space-y-4">
-                <div className="bg-amber-50 border border-amber-100 rounded-lg p-4">
-                  <p className="text-sm text-amber-800 font-medium mb-1">Auto-close inactive chats</p>
-                  <p className="text-xs text-amber-700">
+                <div className="bg-orange-500 rounded-lg p-4">
+                  <p className="text-sm text-white font-medium mb-1">Auto-close inactive chats</p>
+                  <p className="text-xs text-orange-100">
                     If there's no email activity for the set period, the contact is removed and they'll need
                     to send a new Knocc request (and pay again) to reach you.
                   </p>

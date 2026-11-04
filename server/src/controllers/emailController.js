@@ -1,4 +1,13 @@
 import prisma from '../utils/prisma.js';
+import { generateReplyToken, sendExternalEmail } from '../services/emailService.js';
+
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
+// Helper: construct a virtual sender object for external-origin emails (senderId is null)
+const resolveSender = (email) =>
+  email.sender || (email.externalSenderEmail
+    ? { id: null, name: email.externalSenderName || email.externalSenderEmail, email: email.externalSenderEmail, verified: false }
+    : null);
 
 // Helper: base select for email with sender, recipients, attachments, per-user flags
 const emailSelect = (userId) => ({
@@ -7,6 +16,8 @@ const emailSelect = (userId) => ({
   body: true,
   isDraft: true,
   sentAt: true,
+  externalSenderEmail: true,
+  externalSenderName: true,
   sender: {
     select: { id: true, name: true, email: true, verified: true },
   },
@@ -33,6 +44,7 @@ const emailSelect = (userId) => ({
 // Shape raw email record into a clean response object
 const shapeEmail = (email, userId) => ({
   ...email,
+  sender: resolveSender(email),
   isStarred: email.stars?.length > 0,
   isDeleted: email.deletes?.length > 0,
   stars: undefined,
@@ -43,8 +55,14 @@ const shapeEmail = (email, userId) => ({
 
 export const sendEmail = async (req, res) => {
   try {
-    const { to, cc, bcc, subject, body, attachments: rawAttachments = [] } = req.body;
+    const {
+      to, cc, bcc, subject, body,
+      attachments: rawAttachments = [],
+      payToReplyEnabled = false,
+      replyFee = 0,
+    } = req.body;
     const senderId = req.user.id;
+    const senderName = req.user.name;
 
     if (!to || to.length === 0) {
       return res.status(400).json({ error: 'At least one recipient is required' });
@@ -53,13 +71,17 @@ export const sendEmail = async (req, res) => {
       return res.status(400).json({ error: 'Subject is required' });
     }
 
-    // Create the email
+    const fee = payToReplyEnabled ? Math.max(0, parseFloat(replyFee) || 0) : 0;
+
+    // Create the email (now stores pay-to-reply settings)
     const email = await prisma.email.create({
       data: {
         subject,
         body: body || '',
         senderId,
         isDraft: false,
+        payToReplyEnabled: !!payToReplyEnabled,
+        replyFee: fee,
         attachments: {
           create: rawAttachments.map((a) => ({
             filename: a.filename,
@@ -71,8 +93,9 @@ export const sendEmail = async (req, res) => {
       },
     });
 
-    // Resolve recipients — collect unknown emails to warn
-    const unknownEmails = [];
+    // Resolve recipients — separate internal (registered + contact) from external
+    const unknownEmails = [];       // registered but NOT an approved contact
+    const externalRecipients = []; // not registered on Pmail at all → pay-to-reply
     const recipientRows = [];
 
     const resolveRecipients = async (emails, type) => {
@@ -98,6 +121,7 @@ export const sendEmail = async (req, res) => {
               const expiry = new Date(lastActivity);
               expiry.setMonth(expiry.getMonth() + recipient.chatExpiryMonths);
               if (new Date() > expiry) {
+                await prisma.email.delete({ where: { id: email.id } });
                 return res.status(403).json({
                   error: `Your chat access to ${recipientEmail} has expired. Send a new Knocc request to reconnect.`,
                   expired: true,
@@ -108,7 +132,8 @@ export const sendEmail = async (req, res) => {
           }
           recipientRows.push({ emailId: email.id, recipientId: user.id, type });
         } else {
-          unknownEmails.push(recipientEmail);
+          // Not a registered Pmail user → external recipient (pay-to-reply)
+          externalRecipients.push({ email: recipientEmail, type });
         }
       }
     };
@@ -117,13 +142,52 @@ export const sendEmail = async (req, res) => {
     if (cc?.length) await resolveRecipients(cc, 'CC');
     if (bcc?.length) await resolveRecipients(bcc, 'BCC');
 
+    // Create EmailRecipient rows for internal recipients
     if (recipientRows.length > 0) {
       await prisma.emailRecipient.createMany({ data: recipientRows });
     }
 
-    // If no TO recipient was found on the platform, abort
-    const resolvedTo = recipientRows.filter(r => r.type === 'TO');
-    if (resolvedTo.length === 0) {
+    // ── Handle external recipients via pay-to-reply (SMTP) ──────────────────
+    const externalToRecipients = externalRecipients.filter((r) => r.type === 'TO');
+
+    if (externalToRecipients.length > 0) {
+      const replyUrlBase = `${CLIENT_URL}/?reply=`;
+
+      for (const ext of externalToRecipients) {
+        const replyToken = generateReplyToken();
+
+        await prisma.payToReplyInvitation.create({
+          data: {
+            emailId: email.id,
+            senderId,
+            externalEmail: ext.email,
+            replyFee: fee,
+            replyToken,
+            status: 'PENDING',
+          },
+        });
+
+        // Send the actual email to the external address via SMTP
+        try {
+          await sendExternalEmail({
+            to: ext.email,
+            senderName,
+            subject,
+            body: body || '',
+            replyUrl: `${replyUrlBase}${replyToken}`,
+            replyFee: fee,
+          });
+        } catch (emailErr) {
+          console.error(`Failed to send external email to ${ext.email}:`, emailErr.message);
+          // The invitation is still created — the recipient can't reply yet,
+          // but we don't fail the whole request.
+        }
+      }
+    }
+
+    // If no TO recipient was resolved at all (neither internal nor external), abort
+    const resolvedTo = recipientRows.filter((r) => r.type === 'TO');
+    if (resolvedTo.length === 0 && externalToRecipients.length === 0) {
       // Clean up the orphaned email record
       await prisma.email.delete({ where: { id: email.id } });
       return res.status(422).json({
@@ -133,7 +197,7 @@ export const sendEmail = async (req, res) => {
     }
 
     // Refresh lastEmailAt for contact records between sender and each TO/CC recipient
-    const recipientUserIds = recipientRows.map(r => r.recipientId)
+    const recipientUserIds = recipientRows.map((r) => r.recipientId);
     if (recipientUserIds.length > 0) {
       await prisma.contact.updateMany({
         where: {
@@ -143,13 +207,16 @@ export const sendEmail = async (req, res) => {
           ],
         },
         data: { lastEmailAt: new Date() },
-      })
+      });
     }
 
     res.status(201).json({
       message: 'Email sent successfully',
       email,
       unknownRecipients: unknownEmails.length > 0 ? unknownEmails : undefined,
+      externalRecipients: externalToRecipients.length > 0
+        ? externalToRecipients.map((r) => r.email)
+        : undefined,
     });
   } catch (error) {
     console.error('Send email error:', error);
@@ -316,6 +383,7 @@ export const getInbox = async (req, res) => {
 
     const emails = recipientRows.map((row) => ({
       ...row.email,
+      sender: resolveSender(row.email),
       isRead: row.isRead,
       readAt: row.readAt,
       recipientType: row.type,
@@ -397,19 +465,23 @@ export const getEmailById = async (req, res) => {
       });
 
       // Refresh lastEmailAt — reading an email counts as activity between contacts
+      // (skip for external-origin emails where senderId is null)
       const senderId = recipientRow.email.senderId
-      await prisma.contact.updateMany({
-        where: {
-          OR: [
-            { userId, contactId: senderId },
-            { userId: senderId, contactId: userId },
-          ],
-        },
-        data: { lastEmailAt: new Date() },
-      })
+      if (senderId) {
+        await prisma.contact.updateMany({
+          where: {
+            OR: [
+              { userId, contactId: senderId },
+              { userId: senderId, contactId: userId },
+            ],
+          },
+          data: { lastEmailAt: new Date() },
+        })
+      }
 
       const email = {
         ...recipientRow.email,
+        sender: resolveSender(recipientRow.email),
         isRead: true,
         recipientType: recipientRow.type,
         isStarred: recipientRow.email.stars?.length > 0,
@@ -512,7 +584,7 @@ export const getStarredEmails = async (req, res) => {
 
     const emails = stars
       .filter((s) => s.email.deletes?.length === 0)
-      .map((s) => ({ ...s.email, isStarred: true, deletes: undefined }));
+      .map((s) => ({ ...s.email, sender: resolveSender(s.email), isStarred: true, deletes: undefined }));
 
     res.json({ emails });
   } catch (error) {
@@ -577,6 +649,7 @@ export const getBinEmails = async (req, res) => {
 
     const emails = deleted.map((d) => ({
       ...d.email,
+      sender: resolveSender(d.email),
       isStarred: d.email.stars?.length > 0,
       stars: undefined,
     }));

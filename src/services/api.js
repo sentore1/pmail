@@ -264,6 +264,26 @@ export const userAPI = {
 
 // Wallet API
 export const walletAPI = {
+  // Stripe payment methods
+  createStripePaymentIntent: async (amount) => {
+    const response = await fetch(`${API_URL}/wallet/stripe/create-payment-intent`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ amount }),
+    });
+    return handleResponse(response);
+  },
+
+  confirmStripePayment: async (paymentIntentId) => {
+    const response = await fetch(`${API_URL}/wallet/stripe/confirm-payment`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ paymentIntentId }),
+    });
+    return handleResponse(response);
+  },
+
+  // Legacy methods
   addFunds: async (amount) => {
     const response = await fetch(`${API_URL}/wallet/add-funds`, {
       method: 'POST',
@@ -413,4 +433,45 @@ export const googleAPI = {
   getGmailStatus: async () => ({ connected: false, lastSynced: null, learnedTopics: [] }),
   revokeGmailAccess: async () => {},
   syncGmailLearning: async () => {},
+};
+
+// Pay-to-Reply API — PUBLIC endpoints (no authentication required)
+// Used by external email recipients who don't have a Pmail account.
+export const payToReplyAPI = {
+  // Get invitation info by reply token
+  getInvitation: async (token) => {
+    const response = await fetch(`${API_URL}/pay-to-reply/${token}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse(response);
+  },
+
+  // Create a Stripe PaymentIntent for the reply fee
+  createPayment: async (token) => {
+    const response = await fetch(`${API_URL}/pay-to-reply/${token}/create-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse(response);
+  },
+
+  // Confirm Stripe payment — marks invitation PAID, credits sender wallet
+  confirmPayment: async (token, paymentIntentId) => {
+    const response = await fetch(`${API_URL}/pay-to-reply/${token}/confirm-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentIntentId }),
+    });
+    return handleResponse(response);
+  },
+
+  // Submit the reply text (only allowed after payment, or if fee is 0)
+  submitReply: async (token, { replyBody, senderName }) => {
+    const response = await fetch(`${API_URL}/pay-to-reply/${token}/reply`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ replyBody, senderName }),
+    });
+    return handleResponse(response);
+  },
 };

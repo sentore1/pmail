@@ -1,5 +1,8 @@
 import prisma from '../utils/prisma.js';
 import axios from 'axios';
+import Stripe from 'stripe';
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || 'sk_test_dummy');
 
 const POLAR_API_URL = process.env.POLAR_API_URL || 'http://localhost:8081';
 const POLAR_MACAROON = process.env.POLAR_MACAROON || '';
@@ -56,6 +59,117 @@ const parseAmount = (raw) => {
   return n;
 };
 
+// Create Stripe Payment Intent
+export const createStripePaymentIntent = async (req, res) => {
+  try {
+    const amount = parseAmount(req.body.amount);
+    if (!amount) return res.status(400).json({ error: 'Amount must be a positive number' });
+    
+    const userId = req.user.id;
+    const user = await prisma.user.findUnique({ where: { id: userId }, select: { email: true, name: true } });
+
+    // Calculate fee (5% of transaction)
+    const feePercentage = parseFloat(process.env.TRANSACTION_FEE_PERCENTAGE || 5);
+    const feeAmount = amount * (feePercentage / 100);
+    const totalAmount = amount + feeAmount;
+    
+    // Create Stripe Payment Intent (Stripe expects amount in cents)
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount: Math.round(totalAmount * 100), // Convert to cents
+      currency: 'usd',
+      metadata: {
+        userId: userId.toString(),
+        depositAmount: amount.toString(),
+        feeAmount: feeAmount.toString(),
+        feePercentage: feePercentage.toString(),
+      },
+      description: `Pmail Wallet Top-up: $${amount.toFixed(2)} + $${feeAmount.toFixed(2)} fee (${feePercentage}%)`,
+      receipt_email: user.email,
+    });
+
+    res.json({
+      clientSecret: paymentIntent.client_secret,
+      paymentIntentId: paymentIntent.id,
+      amount,
+      feeAmount,
+      totalAmount,
+      feePercentage,
+    });
+  } catch (err) {
+    console.error('Create payment intent error:', err);
+    res.status(500).json({ error: 'Failed to create payment intent' });
+  }
+};
+
+// Confirm and credit wallet after successful Stripe payment
+export const confirmStripePayment = async (req, res) => {
+  try {
+    const { paymentIntentId } = req.body;
+    if (!paymentIntentId) return res.status(400).json({ error: 'Payment intent ID required' });
+    
+    const userId = req.user.id;
+
+    // Verify payment with Stripe
+    const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+    
+    if (paymentIntent.status !== 'succeeded') {
+      return res.status(400).json({ error: 'Payment not completed' });
+    }
+
+    // Check for duplicate processing
+    const existingTxn = await prisma.transaction.findFirst({
+      where: {
+        userId,
+        description: { contains: paymentIntentId },
+        type: 'DEPOSIT',
+      },
+    });
+
+    if (existingTxn) {
+      const user = await prisma.user.findUnique({ where: { id: userId }, select: { walletBalance: true } });
+      return res.json({ 
+        message: 'Payment already processed',
+        walletBalance: user.walletBalance,
+        alreadyProcessed: true,
+      });
+    }
+
+    // Extract amounts from metadata
+    const depositAmount = parseFloat(paymentIntent.metadata.depositAmount);
+    const feeAmount = parseFloat(paymentIntent.metadata.feeAmount);
+    const feePercentage = parseFloat(paymentIntent.metadata.feePercentage);
+
+    // Credit user wallet with deposit amount (fee goes to company)
+    const user = await prisma.user.update({
+      where: { id: userId },
+      data: { walletBalance: { increment: depositAmount } },
+      select: { walletBalance: true },
+    });
+
+    // Record transaction
+    await prisma.transaction.create({
+      data: {
+        userId,
+        type: 'DEPOSIT',
+        amount: depositAmount,
+        description: `Stripe deposit: $${depositAmount.toFixed(2)} (Fee: $${feeAmount.toFixed(2)}, ${feePercentage}%) - ${paymentIntentId}`,
+      },
+    });
+
+    res.json({
+      message: 'Funds added successfully',
+      walletBalance: user.walletBalance,
+      depositAmount,
+      feeAmount,
+      totalCharged: depositAmount + feeAmount,
+    });
+  } catch (err) {
+    console.error('Confirm payment error:', err);
+    res.status(500).json({ error: 'Failed to confirm payment' });
+  }
+};
+
+// Legacy add funds (for backward compatibility or testing)
 export const addFunds = async (req, res) => {
   try {
     const amount = parseAmount(req.body.amount);

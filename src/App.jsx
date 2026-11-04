@@ -136,7 +136,9 @@ function App() {
 
   const handleDeleteEmails = async (ids) => {
     try {
-      if (currentView === 'bin') {
+      if (currentView === 'drafts') {
+        await Promise.allSettled(ids.map((id) => emailAPI.deleteDraft(id)))
+      } else if (currentView === 'bin') {
         await Promise.allSettled(ids.map((id) => emailAPI.permanentlyDeleteEmail(id)))
       } else {
         await Promise.allSettled(ids.map((id) => emailAPI.deleteEmail(id)))

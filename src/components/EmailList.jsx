@@ -161,7 +161,7 @@ function EmailList({ emails, selectedEmail, onSelectEmail, viewType, effectiveVi
                 <button
                   onClick={() => handleTabChange('inbox')}
                   className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                    inboxTab === 'inbox' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                    inboxTab === 'inbox' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
                   Inbox
@@ -172,7 +172,7 @@ function EmailList({ emails, selectedEmail, onSelectEmail, viewType, effectiveVi
                 <button
                   onClick={() => handleTabChange('sent')}
                   className={`px-3 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                    inboxTab === 'sent' ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'
+                    inboxTab === 'sent' ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'
                   }`}
                 >
                   Sent
@@ -185,7 +185,7 @@ function EmailList({ emails, selectedEmail, onSelectEmail, viewType, effectiveVi
                   {[['pryro','purple'],['paid','green'],['all','blue']].map(([tab, color]) => (
                     <button key={tab} onClick={() => handleKnoccTabChange(tab)}
                       className={`px-2.5 py-1 rounded-xl text-xs font-medium transition-colors flex items-center gap-1 ${
-                        knoccTab === tab ? `bg-${color}-50 text-${color}-600` : 'text-gray-600 hover:bg-gray-50'
+                        knoccTab === tab ? `bg-blue-600 text-white` : 'text-gray-600 hover:bg-gray-50'
                       }`}
                     >
                       {tab !== 'all' && (

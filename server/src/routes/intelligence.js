@@ -1,9 +1,28 @@
 import express from 'express';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { learnFromSentEmails, getLearningProfile } from '../services/emailLearningEngine.js';
-import { lookupPublicFigure, calcAge } from '../services/publicFigures.js';
+import { lookupPublicFigure, queryWikipedia, calcAge } from '../services/publicFigures.js';
 import axios from 'axios';
 import { authenticate } from '../middleware/auth.js';
+
+// ── Wikipedia cache (in-memory, 1 hour TTL) ───────────────────────────────────
+const wikiCache = new Map(); // name -> {data, timestamp}
+const CACHE_TTL = 3_600_000; // 1 hour
+
+function getCachedWiki(name) {
+  const key = name.toLowerCase().trim();
+  const cached = wikiCache.get(key);
+  if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
+    return cached.data;
+  }
+  wikiCache.delete(key);
+  return null;
+}
+
+function setCachedWiki(name, data) {
+  const key = name.toLowerCase().trim();
+  wikiCache.set(key, { data, timestamp: Date.now() });
+}
 
 // Complete world dial code map (all UN-recognised + commonly used territories)
 const COUNTRY_DIAL = {
@@ -218,7 +237,22 @@ router.post('/scrape-user-data', async (req, res) => {
     const { name, email, timezone, language } = req.body;
 
     // ── 1. Public figure check (most accurate possible signal) ───────────────
-    const figure = lookupPublicFigure(name || '');
+    // Step A: Check static database first (instant)
+    let figure = lookupPublicFigure(name || '');
+    
+    // Step B: If not in static DB, check cache
+    if (!figure && name && name.trim().split(/\s+/).length >= 2) {
+      figure = getCachedWiki(name);
+    }
+    
+    // Step C: If not cached and name looks like a full name, query Wikipedia
+    if (!figure && name && name.trim().split(/\s+/).length >= 2) {
+      figure = await queryWikipedia(name);
+      if (figure) {
+        setCachedWiki(name, figure); // Cache for future requests
+      }
+    }
+    
     if (figure) {
       const dialCode = COUNTRY_DIAL[figure.country] || null;
       return res.json({
@@ -233,7 +267,7 @@ router.post('/scrape-user-data', async (req, res) => {
           nameOrigin: 'public_figure',
           interests:  [figure.occupation],
           signals: {
-            source:     'public_figure',
+            source:     figure.source || 'public_figure',
             figureName: figure.fullName,
             ipCountry:  null,
             tzCountry:  null,
@@ -243,12 +277,14 @@ router.post('/scrape-user-data', async (req, res) => {
       });
     }
 
-    // ── 2. Regular user: IP geo (primary) + timezone (corroboration) ─────────
+    // ── 2. Regular user: timezone (primary) + IP (secondary) + language (tertiary) ─
     const ip =
       req.headers['x-forwarded-for']?.split(',')[0]?.trim() ||
       req.headers['x-real-ip'] ||
       req.socket?.remoteAddress ||
       req.ip;
+
+    console.log(`[scrape] Input - Name: "${name}", TZ: ${timezone}, Lang: ${language}, IP: ${ip}`);
 
     // Run IP geo + name profiling in parallel for speed
     const [ipData, profile] = await Promise.all([
@@ -256,16 +292,35 @@ router.post('/scrape-user-data', async (req, res) => {
       userIntelligenceEngine.scrapePublicData(name || '', email || '', timezone || null, language || null),
     ]);
 
-    // Priority: IP geo first (most reliable), then timezone, then language/name
-    const country = ipData?.country || profile.country || null;
-    const source  = ipData?.country ? 'ip' : (profile.country ? (timezone ? 'timezone' : 'language') : 'name');
+    console.log(`[scrape] IP Data:`, ipData);
+    console.log(`[scrape] Profile from scrapePublicData:`, profile);
 
+    // Priority: IP geo first (most accurate for real location), then timezone (fallback), then language/name
+    // Use timezone only when IP fails (localhost, VPN, etc.)
     const tzCountry = timezone ? userIntelligenceEngine.timezoneToCountry(timezone) : null;
-    if (tzCountry && ipData?.country && tzCountry !== ipData.country) {
-      console.log(`[scrape] TZ says ${tzCountry}, IP says ${ipData.country} — trusting IP`);
+    
+    let country = null;
+    let source = 'none';
+    
+    // Use IP geo data if available (even for localhost, since resolveIP handles it)
+    if (ipData?.country) {
+      country = ipData.country;
+      source = 'ip';
+    } 
+    // Fall back to timezone/profile only when IP completely failed
+    else if (profile.country) {
+      country = profile.country;
+      source = timezone ? 'timezone' : (language ? 'language' : 'name');
     }
 
-    const dialCode = country ? (Object.entries(COUNTRY_DIAL).find(([c]) => c === country)?.[1] || null) : null;
+    if (tzCountry && ipData?.country && tzCountry !== ipData.country) {
+      console.log(`[scrape] TZ says ${tzCountry}, IP says ${ipData.country} — using IP (real location)`);
+    }
+
+    // Always get dial code from the final country
+    const dialCode = country ? (COUNTRY_DIAL[country] || null) : null;
+
+    console.log(`[scrape] Result - Country: ${country}, Dial: ${dialCode}, Source: ${source}, TZ: ${timezone}, Lang: ${language}, IP: ${ip}`);
 
     res.json({
       success: true,

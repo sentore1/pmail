@@ -209,7 +209,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
               onClick={() => setPeopleTab('who-you-know')}
               className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${
                 peopleTab === 'who-you-know'
-                  ? 'bg-blue-50 text-blue-600'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-600 hover:bg-gray-50'
               }`}
             >
@@ -219,7 +219,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
               onClick={() => setPeopleTab('all-people')}
               className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${
                 peopleTab === 'all-people'
-                  ? 'bg-blue-50 text-blue-600'
+                  ? 'bg-blue-600 text-white'
                   : 'text-gray-600 hover:bg-gray-50'
               }`}
             >

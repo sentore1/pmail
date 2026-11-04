@@ -13,6 +13,8 @@
  *   occupation - brief description
  */
 
+import axios from 'axios';
+
 const PUBLIC_FIGURES = [
   // ── Tech / VC ──────────────────────────────────────────────────────────────
   {
@@ -309,6 +311,154 @@ export function lookupPublicFigure(name) {
     }
   }
   return null;
+}
+
+/**
+ * Query Wikipedia API for a person and extract biographical data.
+ * Uses Wikipedia's REST API and Wikidata for structured info.
+ */
+export async function queryWikipedia(name) {
+  if (!name || name.trim().length < 4) return null;
+  
+  try {
+    const searchName = name.trim();
+    
+    // Step 1: Search Wikipedia for the person
+    const searchUrl = `https://en.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(searchName)}`;
+    const searchRes = await axios.get(searchUrl, { 
+      timeout: 5000,
+      headers: { 'User-Agent': 'Pmail/1.0 (Educational Project)' }
+    });
+    
+    if (searchRes.status !== 200) return null;
+    const data = searchRes.data;
+    
+    // Only proceed if it's a person (biography)
+    if (data.type !== 'standard' || !data.extract) return null;
+    
+    const extract = data.extract.toLowerCase();
+    
+    // Check if it's actually about a person
+    const personIndicators = [
+      'born', 'birth', 'is a', 'was a', 'politician', 'actor', 'actress',
+      'singer', 'musician', 'athlete', 'player', 'scientist', 'author',
+      'writer', 'entrepreneur', 'businessman', 'ceo', 'founder', 'president',
+      'minister', 'director', 'artist', 'rapper', 'producer'
+    ];
+    
+    if (!personIndicators.some(ind => extract.includes(ind))) return null;
+    
+    // Extract biographical info from the text
+    const result = {
+      fullName: data.title || searchName,
+      country: null,
+      birthYear: null,
+      gender: null,
+      occupation: null,
+      source: 'wikipedia'
+    };
+    
+    // Extract birth year (various formats)
+    const birthYearMatch = extract.match(/\bborn[^\d]*(\d{4})\b/) || 
+                          extract.match(/\b(\d{4})[–-]\d{4}\b/) ||
+                          extract.match(/\(born[^\d]*(\d{4})\)/);
+    if (birthYearMatch) {
+      const year = parseInt(birthYearMatch[1]);
+      if (year >= 1900 && year <= new Date().getFullYear()) {
+        result.birthYear = year;
+      }
+    }
+    
+    // Extract gender from pronouns in first 500 chars
+    const firstPart = extract.substring(0, 500);
+    if (/\b(he|his|him)\b/.test(firstPart) && !/\b(she|her|hers)\b/.test(firstPart)) {
+      result.gender = 'male';
+    } else if (/\b(she|her|hers)\b/.test(firstPart) && !/\b(he|his|him)\b/.test(firstPart)) {
+      result.gender = 'female';
+    }
+    
+    // Extract occupation (first sentence usually contains "is a ..." or "was a ...")
+    const occupationMatch = extract.match(/(?:is|was)\s+(?:an?\s+)?([^.]{10,80}?)(?:\.|born|who)/i);
+    if (occupationMatch) {
+      result.occupation = occupationMatch[1].trim()
+        .replace(/\s+/g, ' ')
+        .substring(0, 100); // limit length
+    }
+    
+    // Try to extract country from common patterns
+    const countryPatterns = [
+      /\b(american|united states)\b/i,
+      /\b(british|united kingdom)\b/i,
+      /\b(canadian)\b/i,
+      /\b(australian)\b/i,
+      /\b(french)\b/i,
+      /\b(german)\b/i,
+      /\b(italian)\b/i,
+      /\b(spanish)\b/i,
+      /\b(indian)\b/i,
+      /\b(chinese)\b/i,
+      /\b(japanese)\b/i,
+      /\b(south korean)\b/i,
+      /\b(brazilian)\b/i,
+      /\b(mexican)\b/i,
+      /\b(argentinian|argentine)\b/i,
+      /\b(nigerian)\b/i,
+      /\b(south african)\b/i,
+      /\b(russian)\b/i,
+      /\b(rwandan)\b/i,
+      /\b(kenyan)\b/i,
+      /\b(ghanaian)\b/i,
+      /\b(egyptian)\b/i,
+    ];
+    
+    const countryMap = {
+      'american': 'United States',
+      'united states': 'United States',
+      'british': 'United Kingdom',
+      'united kingdom': 'United Kingdom',
+      'canadian': 'Canada',
+      'australian': 'Australia',
+      'french': 'France',
+      'german': 'Germany',
+      'italian': 'Italy',
+      'spanish': 'Spain',
+      'indian': 'India',
+      'chinese': 'China',
+      'japanese': 'Japan',
+      'south korean': 'South Korea',
+      'brazilian': 'Brazil',
+      'mexican': 'Mexico',
+      'argentinian': 'Argentina',
+      'argentine': 'Argentina',
+      'nigerian': 'Nigeria',
+      'south african': 'South Africa',
+      'russian': 'Russia',
+      'rwandan': 'Rwanda',
+      'kenyan': 'Kenya',
+      'ghanaian': 'Ghana',
+      'egyptian': 'Egypt',
+    };
+    
+    for (const pattern of countryPatterns) {
+      const match = firstPart.match(pattern);
+      if (match) {
+        const key = match[1].toLowerCase();
+        result.country = countryMap[key];
+        break;
+      }
+    }
+    
+    // Only return if we extracted meaningful data
+    if (result.birthYear || result.gender || result.occupation) {
+      console.log('[wikipedia] Found:', result);
+      return result;
+    }
+    
+    return null;
+  } catch (error) {
+    console.error('[wikipedia] Query error:', error.message);
+    return null;
+  }
 }
 
 /**

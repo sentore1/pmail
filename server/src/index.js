@@ -9,6 +9,7 @@ import walletRoutes from './routes/wallet.js';
 import invitationRoutes from './routes/invitations.js';
 import googleRoutes from './routes/google.js';
 import intelligenceRoutes from './routes/intelligence.js';
+import payToReplyRoutes from './routes/payToReply.js';
 
 dotenv.config();
 
@@ -32,6 +33,7 @@ app.use('/api/wallet', walletRoutes);
 app.use('/api/invitations', invitationRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
+app.use('/api/pay-to-reply', payToReplyRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {

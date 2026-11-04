@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Wallet, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft } from 'lucide-react'
+import { X, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft, AlertCircle } from 'lucide-react'
 import { walletAPI } from '../services/api'
+import { loadStripe } from '@stripe/stripe-js'
+
+// Initialize Stripe
+const stripePromise = loadStripe(import.meta.env.VITE_STRIPE_PUBLISHABLE_KEY || 'pk_test_dummy')
 
 function WalletModal({ onClose, user }) {
   const [balance, setBalance] = useState(0)
@@ -16,6 +20,14 @@ function WalletModal({ onClose, user }) {
   const [checkingInvoice, setCheckingInvoice] = useState(false)
   const [withdrawMethod, setWithdrawMethod] = useState('bank')
   const [lightningAddress, setLightningAddress] = useState('')
+  const [stripeProcessing, setStripeProcessing] = useState(false)
+  const [feeInfo, setFeeInfo] = useState(null)
+  const [cardDetails, setCardDetails] = useState({
+    cardNumber: '',
+    expiry: '',
+    cvc: '',
+    name: ''
+  })
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -74,27 +86,85 @@ function WalletModal({ onClose, user }) {
       return
     }
 
+    // Validate card details
+    if (!cardDetails.cardNumber || !cardDetails.expiry || !cardDetails.cvc || !cardDetails.name) {
+      setError('Please fill in all card details')
+      return
+    }
+
     setLoading(true)
+    setStripeProcessing(true)
     setError('')
     
     try {
-      const response = await walletAPI.addFunds(parseFloat(amount))
+      // Create payment intent
+      const paymentData = await walletAPI.createStripePaymentIntent(parseFloat(amount))
       
-      if (response.walletBalance !== undefined) {
-        setBalance(response.walletBalance)
+      // Show fee information
+      setFeeInfo({
+        amount: paymentData.amount,
+        feeAmount: paymentData.feeAmount,
+        totalAmount: paymentData.totalAmount,
+        feePercentage: paymentData.feePercentage
+      })
+
+      // Get Stripe instance
+      const stripe = await stripePromise
+      
+      if (!stripe) {
+        throw new Error('Stripe failed to load')
       }
-      
-      setSuccess('Funds added successfully!')
-      setAmount('')
-      await loadWalletData()
-      setTimeout(() => {
-        setActiveTab('overview')
-        setSuccess('')
-      }, 2000)
+
+      // Parse expiry date
+      const [expMonth, expYear] = cardDetails.expiry.split('/').map(s => s.trim())
+
+      // Confirm payment with card details
+      const { error: stripeError, paymentIntent } = await stripe.confirmCardPayment(
+        paymentData.clientSecret,
+        {
+          payment_method: {
+            card: {
+              number: cardDetails.cardNumber.replace(/\s/g, ''),
+              exp_month: parseInt(expMonth),
+              exp_year: parseInt(expYear.length === 2 ? '20' + expYear : expYear),
+              cvc: cardDetails.cvc,
+            },
+            billing_details: {
+              name: cardDetails.name,
+              email: user.email,
+            },
+          },
+        }
+      )
+
+      if (stripeError) {
+        throw new Error(stripeError.message)
+      }
+
+      if (paymentIntent.status === 'succeeded') {
+        // Confirm payment on backend
+        const response = await walletAPI.confirmStripePayment(paymentIntent.id)
+        
+        if (response.walletBalance !== undefined) {
+          setBalance(response.walletBalance)
+        }
+        
+        setSuccess(`Successfully added $${paymentData.amount.toFixed(2)}! (Fee: $${paymentData.feeAmount.toFixed(2)})`)
+        setAmount('')
+        setCardDetails({ cardNumber: '', expiry: '', cvc: '', name: '' })
+        setFeeInfo(null)
+        await loadWalletData()
+        
+        setTimeout(() => {
+          setActiveTab('overview')
+          setSuccess('')
+        }, 3000)
+      }
     } catch (err) {
-      setError(err.message || 'Failed to add funds')
+      setError(err.message || 'Payment failed. Please try again.')
     } finally {
       setLoading(false)
+      setStripeProcessing(false)
     }
   }
 
@@ -220,9 +290,6 @@ function WalletModal({ onClose, user }) {
                 <ArrowLeft className="w-5 h-5 text-gray-600" />
               </button>
             )}
-            <div className="w-10 h-10 bg-blue-50 rounded-full flex items-center justify-center">
-              <Wallet className="w-5 h-5 text-blue-600" />
-            </div>
             <div>
               <h2 className="text-lg font-medium text-gray-900">
                 {activeTab === 'overview' && 'My Wallet'}
@@ -362,7 +429,7 @@ function WalletModal({ onClose, user }) {
                       >
                         <CreditCard className={`w-6 h-6 mx-auto mb-2 ${paymentMethod === 'card' ? 'text-blue-600' : 'text-gray-400'}`} />
                         <p className="text-sm font-medium text-gray-900">Card</p>
-                        <p className="text-xs text-gray-500 mt-1">Instant</p>
+                        <p className="text-xs text-gray-500 mt-1">Instant (via Stripe)</p>
                       </button>
                       <button
                         onClick={() => setPaymentMethod('lightning')}
@@ -405,6 +472,90 @@ function WalletModal({ onClose, user }) {
                     ))}
                   </div>
 
+                  {/* Card Details Form - Only show for card payment */}
+                  {paymentMethod === 'card' && (
+                    <div className="mb-4 space-y-3 p-4 bg-gray-50 rounded-lg">
+                      <h4 className="text-sm font-medium text-gray-900 mb-3">Card Details</h4>
+                      
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Card Number</label>
+                        <input
+                          type="text"
+                          value={cardDetails.cardNumber}
+                          onChange={(e) => {
+                            const value = e.target.value.replace(/\s/g, '').replace(/[^0-9]/g, '')
+                            const formatted = value.match(/.{1,4}/g)?.join(' ') || value
+                            setCardDetails(prev => ({ ...prev, cardNumber: formatted }))
+                          }}
+                          placeholder="1234 5678 9012 3456"
+                          maxLength="19"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Expiry (MM/YY)</label>
+                          <input
+                            type="text"
+                            value={cardDetails.expiry}
+                            onChange={(e) => {
+                              let value = e.target.value.replace(/[^0-9]/g, '')
+                              if (value.length >= 2) {
+                                value = value.slice(0, 2) + '/' + value.slice(2, 4)
+                              }
+                              setCardDetails(prev => ({ ...prev, expiry: value }))
+                            }}
+                            placeholder="MM/YY"
+                            maxLength="5"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">CVC</label>
+                          <input
+                            type="text"
+                            value={cardDetails.cvc}
+                            onChange={(e) => {
+                              const value = e.target.value.replace(/[^0-9]/g, '').slice(0, 4)
+                              setCardDetails(prev => ({ ...prev, cvc: value }))
+                            }}
+                            placeholder="123"
+                            maxLength="4"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                          />
+                        </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Cardholder Name</label>
+                        <input
+                          type="text"
+                          value={cardDetails.name}
+                          onChange={(e) => setCardDetails(prev => ({ ...prev, name: e.target.value }))}
+                          placeholder="John Doe"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                      </div>
+
+                      {feeInfo && (
+                        <div className="mt-3 p-3 bg-blue-50 border border-blue-200 rounded-md">
+                          <div className="flex items-start gap-2">
+                            <AlertCircle className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
+                            <div className="text-xs text-blue-800">
+                              <p className="font-medium mb-1">Transaction Fee</p>
+                              <div className="space-y-1">
+                                <p>Deposit Amount: ${feeInfo.amount.toFixed(2)}</p>
+                                <p>Processing Fee ({feeInfo.feePercentage}%): ${feeInfo.feeAmount.toFixed(2)}</p>
+                                <p className="font-semibold pt-1 border-t border-blue-300">Total Charge: ${feeInfo.totalAmount.toFixed(2)}</p>
+                              </div>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   <button
                     onClick={paymentMethod === 'card' ? handleAddFundsCard : handleCreateLightningInvoice}
                     disabled={!amount || parseFloat(amount) < 1 || loading}
@@ -413,7 +564,7 @@ function WalletModal({ onClose, user }) {
                     {loading ? (
                       <>
                         <Clock className="w-4 h-4 animate-spin" />
-                        Processing...
+                        {stripeProcessing ? 'Processing Payment...' : 'Processing...'}
                       </>
                     ) : paymentMethod === 'card' ? (
                       <>
@@ -427,6 +578,12 @@ function WalletModal({ onClose, user }) {
                       </>
                     )}
                   </button>
+                  
+                  {paymentMethod === 'card' && (
+                    <p className="text-xs text-gray-500 text-center mt-2">
+                      Secured by Stripe • A {parseFloat(import.meta.env.VITE_TRANSACTION_FEE_PERCENTAGE || 5)}% processing fee will be added
+                    </p>
+                  )}
                 </>
               ) : (
                 <div className="text-center">

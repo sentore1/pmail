@@ -1,11 +1,15 @@
 import React, { useState } from 'react'
 import { Mail, Eye, EyeOff, ArrowLeft } from 'lucide-react'
 import OnboardingFlow from './OnboardingFlow'
+import TermsOfService from './TermsOfService'
+import PrivacyPolicy from './PrivacyPolicy'
 import { authAPI } from '../services/api'
 
 function LoginPage({ onLogin }) {
   const [isLogin, setIsLogin] = useState(true)
   const [showOnboarding, setShowOnboarding] = useState(false)
+  const [showTerms, setShowTerms] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [step, setStep] = useState(1)
   const [formData, setFormData] = useState({
@@ -109,6 +113,14 @@ function LoginPage({ onLogin }) {
     return <OnboardingFlow onComplete={onLogin} />;
   }
 
+  if (showTerms) {
+    return <TermsOfService onBack={() => setShowTerms(false)} />
+  }
+
+  if (showPrivacy) {
+    return <PrivacyPolicy onBack={() => setShowPrivacy(false)} />
+  }
+
   return (
     <div className="min-h-screen bg-white flex items-center justify-center p-8">
       <div className="w-full max-w-6xl flex items-center gap-16">
@@ -143,7 +155,7 @@ function LoginPage({ onLogin }) {
           )}
 
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded text-sm text-red-600">
+            <div className="mb-4 text-sm text-red-600">
               {error}
             </div>
           )}
@@ -152,16 +164,25 @@ function LoginPage({ onLogin }) {
             {/* Step 1: Email */}
             {step === 1 && (
               <div>
-                <input
-                  type="text"
-                  name="email"
-                  value={formData.email}
-                  onChange={handleChange}
-                  required
-                  className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
-                  placeholder={isLogin ? 'Username or email' : 'Email'}
-                  autoFocus
-                />
+                <div className="flex items-center gap-3">
+                  <input
+                    type="text"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleChange}
+                    required
+                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                    placeholder={isLogin ? 'Username or email' : 'Email'}
+                    autoFocus
+                  />
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                  >
+                    Next
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={switchMode}
@@ -175,7 +196,7 @@ function LoginPage({ onLogin }) {
             {/* Step 2: Password (Login) or Name + Password (Signup) */}
             {step === 2 && (
               <>
-                <div className="mb-4 p-3 bg-gray-50 border border-gray-200 rounded text-sm">
+                <div className="mb-4 p-3 bg-gray-50 rounded-2xl text-sm">
                   <span className="text-gray-600">Email: </span>
                   <span className="text-gray-900 font-medium">{formData.email}</span>
                 </div>
@@ -188,38 +209,47 @@ function LoginPage({ onLogin }) {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
                       placeholder="First and last name"
                       autoFocus
                     />
                   </div>
                 )}
 
-                <div>
-                  <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-blue-500 focus-within:ring-1 focus-within:ring-blue-500 bg-white overflow-hidden">
-                    <input
-                      type={showPassword ? 'text' : 'password'}
-                      name="password"
-                      value={formData.password}
-                      onChange={handleChange}
-                      required
-                      className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
-                      placeholder={isLogin ? 'Enter your password' : 'Create a password'}
-                      autoFocus={isLogin}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0"
-                    >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                    </button>
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <div className="flex items-center max-w-xs bg-gray-100 border-0 rounded-2xl overflow-hidden">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        name="password"
+                        value={formData.password}
+                        onChange={handleChange}
+                        required
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
+                        placeholder={isLogin ? 'Enter your password' : 'Create a password'}
+                        autoFocus={isLogin}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                    {!isLogin && (
+                      <p className="mt-2 text-xs text-gray-600">
+                        Use 8 or more characters with a mix of letters, numbers & symbols
+                      </p>
+                    )}
                   </div>
-                  {!isLogin && (
-                    <p className="mt-2 text-xs text-gray-600">
-                      Use 8 or more characters with a mix of letters, numbers & symbols
-                    </p>
-                  )}
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                  >
+                    {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Next'}
+                  </button>
                 </div>
               </>
             )}
@@ -237,7 +267,7 @@ function LoginPage({ onLogin }) {
                       name="phoneNumber"
                       value={formData.phoneNumber}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
                       placeholder="+1234567890"
                     />
                   </div>
@@ -248,7 +278,7 @@ function LoginPage({ onLogin }) {
                       name="age"
                       value={formData.age}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
                       placeholder="25"
                     />
                   </div>
@@ -261,7 +291,7 @@ function LoginPage({ onLogin }) {
                       name="gender"
                       value={formData.gender}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
                     >
                       <option value="">Select</option>
                       <option value="male">Male</option>
@@ -275,7 +305,7 @@ function LoginPage({ onLogin }) {
                       name="country"
                       value={formData.country}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
                     >
                       <option value="">Select Country</option>
                       <option value="United States">United States</option>
@@ -332,37 +362,35 @@ function LoginPage({ onLogin }) {
                   </div>
                 </div>
 
-                <div>
-                  <label className="block text-sm text-gray-700 mb-1">
-                    Knocc Price ($)
-                  </label>
-                  <input
-                    type="number"
-                    name="knoccPrice"
-                    value={formData.knoccPrice}
-                    onChange={handleChange}
-                    min="1"
-                    step="0.01"
-                    className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm"
-                    placeholder="1.00"
-                  />
-                  <p className="mt-1 text-xs text-gray-600">
-                    This is what people will pay to send you a Knocc request
-                  </p>
+                <div className="flex items-start gap-3">
+                  <div className="flex-1">
+                    <label className="block text-sm text-gray-700 mb-1">
+                      Knocc Price ($)
+                    </label>
+                    <input
+                      type="number"
+                      name="knoccPrice"
+                      value={formData.knoccPrice}
+                      onChange={handleChange}
+                      min="1"
+                      step="0.01"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                      placeholder="1.00"
+                    />
+                    <p className="mt-1 text-xs text-gray-600">
+                      This is what people will pay to send you a Knocc request
+                    </p>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={loading}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0 mt-6"
+                  >
+                    {loading ? 'Please wait...' : 'Create account'}
+                  </button>
                 </div>
               </>
             )}
-
-            {/* Submit Button */}
-            <div className="flex justify-end pt-4">
-              <button
-                type="submit"
-                disabled={loading}
-                className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm"
-              >
-                {loading ? 'Please wait...' : step === 1 ? 'Next' : isLogin ? 'Sign in' : step === 2 ? 'Next' : 'Create account'}
-              </button>
-            </div>
           </form>
         </div>
 
@@ -370,9 +398,9 @@ function LoginPage({ onLogin }) {
           <div className="mt-6">
             <p className="text-xs text-gray-600">
               By continuing, you agree to pmail's{' '}
-              <a href="#" className="text-blue-600 hover:underline">Terms of Service</a>
+              <button type="button" onClick={() => setShowTerms(true)} className="text-blue-600 hover:underline">Terms of Service</button>
               {' & '}
-              <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>
+              <button type="button" onClick={() => setShowPrivacy(true)} className="text-blue-600 hover:underline">Privacy Policy</button>
             </p>
           </div>
         </div>

@@ -38,6 +38,10 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
   const [showKnoccPayment, setShowKnoccPayment] = useState(false)
   const [knoccReason, setKnoccReason] = useState('')
 
+  // ── Pay-to-reply (external recipients) ───────────────────────────────────
+  const [payToReplyEnabled, setPayToReplyEnabled] = useState(false)
+  const [replyFee, setReplyFee] = useState('1.00')
+
   // ── Status ────────────────────────────────────────────────────────────────
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -472,8 +476,9 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     if (!bodyHTML?.trim()) { setError('Please enter a message'); return }
 
     // Check if any recipient requires Knocc payment
+    // (skip Knocc when pay-to-reply is enabled — external addresses are sent via SMTP)
     const unapprovedRecipients = finalRecipients.filter(r => !r.approved && r.email.includes('@'))
-    if (unapprovedRecipients.length > 0) {
+    if (unapprovedRecipients.length > 0 && !payToReplyEnabled) {
       setSelectedContact(unapprovedRecipients[0])
       setShowKnoccPayment(true)
       return
@@ -495,6 +500,8 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
         subject,
         body: bodyToSend,
         attachments,
+        payToReplyEnabled,
+        replyFee: parseFloat(replyFee) || 0,
       }
       const res = await emailAPI.sendEmail(emailData)
 
@@ -503,7 +510,10 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
         try { await emailAPI.deleteDraft(draftId) } catch (_) {}
       }
 
-      if (res.unknownRecipients?.length) {
+      if (res.externalRecipients?.length) {
+        setError(`Email sent to external addresses via Pmail: ${res.externalRecipients.join(', ')}`)
+        setTimeout(() => onClose(), 3000)
+      } else if (res.unknownRecipients?.length) {
         setError(`Note: these addresses are not on Pmail and didn't receive the email: ${res.unknownRecipients.join(', ')}`)
         setTimeout(() => onClose(), 3000)
       } else {
@@ -703,7 +713,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
         <div className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {error && (
-              <div className="mx-4 mt-4 mb-2 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600">
+              <div className="mx-4 mt-4 mb-2 text-sm text-red-600">
                 {error}
               </div>
             )}
@@ -716,7 +726,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
                   <div className="flex-1 relative">
                     <div className="flex flex-wrap gap-1.5 items-center min-h-[28px]">
                       {recipients.map((r) => (
-                        <div key={r.email} className="flex items-center gap-1 bg-blue-50 text-blue-700 px-2 py-1 rounded-full text-xs">
+                        <div key={r.email} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs text-white" style={{backgroundColor:'#2563eb'}}>
                           <span>{r.name || r.email}</span>
                           {!r.approved && r.email.includes('@') && (
                             <DollarSign className="w-3 h-3" />
@@ -770,14 +780,14 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
                   <div className="mt-1.5 ml-[52px]">
                     <button 
                       onClick={() => recipientInputRef.current?.focus()}
-                      className="text-xs text-blue-600 hover:text-blue-700 font-medium flex items-center gap-1"
+                      className="text-xs font-medium flex items-center gap-1" style={{color:'#2563eb'}}
                     >
                       <UserPlus className="w-3 h-3" /> Add another recipient
                     </button>
                   </div>
                 )}
                 {recipients.some(r => !r.approved && r.email.includes('@')) && (
-                  <div className="mt-2 flex items-center gap-2 text-sm text-blue-600 bg-blue-50 p-3 rounded-lg">
+                  <div className="mt-2 flex items-center gap-2 text-sm p-3 rounded-lg text-orange-500">
                     <UserPlus className="w-4 h-4 flex-shrink-0" />
                     <span>Some recipients require Knocc requests. Click Send to proceed.</span>
                   </div>
@@ -968,6 +978,43 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
               </div>
             </div>
 
+            {/* Pay-to-reply toggle for external recipients */}
+            <div className="mt-3 pt-3 border-t border-gray-100 flex items-center gap-4 flex-wrap">
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={payToReplyEnabled}
+                  onChange={(e) => setPayToReplyEnabled(e.target.checked)}
+                  className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500"
+                />
+                <span className="text-sm text-gray-700 flex items-center gap-1">
+                  <DollarSign className="w-3.5 h-3.5 text-gray-400" />
+                  Require payment to reply
+                </span>
+              </label>
+              {payToReplyEnabled && (
+                <div className="flex items-center gap-1.5">
+                  <span className="text-sm text-gray-500">Reply fee:</span>
+                  <div className="relative">
+                    <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={replyFee}
+                      onChange={(e) => setReplyFee(e.target.value)}
+                      className="w-20 pl-6 pr-2 py-1 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              )}
+              {payToReplyEnabled && (
+                <span className="text-xs text-gray-400">
+                  External recipients pay this fee to reply — you receive it in your wallet.
+                </span>
+              )}
+            </div>
+
             {/* Attached files */}
             {attachments.length > 0 && (
               <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
@@ -1018,7 +1065,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
               <label className="block text-sm font-medium text-gray-700 mb-2">Reason for contact *</label>
               <textarea value={knoccReason} onChange={(e) => setKnoccReason(e.target.value)}
                 placeholder="Explain why you want to connect..." rows={4}
-                className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none mb-4" />
+                className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none text-sm resize-none mb-4" />
               <div className="flex gap-2">
                 <button onClick={() => { setShowKnoccPayment(false); setSelectedContact(null); }}
                   className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium">Cancel</button>
@@ -1090,13 +1137,10 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
 
       {/* ── Templates Modal ── */}
       {showTemplateModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-[60] p-4">
-          <div className="bg-white rounded-lg w-full max-w-2xl shadow-xl max-h-[80vh] flex flex-col">
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-start z-[60] p-4">
+          <div className="bg-white rounded-lg w-full max-w-2xl shadow-xl max-h-[70vh] flex flex-col mb-2 ml-2">
             <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <FileText className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-semibold text-gray-900">Templates</h3>
-              </div>
+              <h3 className="text-base font-semibold text-gray-900">Templates</h3>
               <button onClick={() => setShowTemplateModal(false)} className="p-1 hover:bg-gray-100 rounded-full">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
@@ -1104,7 +1148,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
             <div className="flex gap-2 px-5 pt-4 pb-2">
               {['content','form'].map((tab) => (
                 <button key={tab} onClick={() => setTemplateTab(tab)}
-                  className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${templateTab === tab ? 'bg-blue-50 text-blue-600' : 'text-gray-600 hover:bg-gray-50'}`}>
+                  className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${templateTab === tab ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
                   {tab === 'content' ? 'Email Templates' : 'Form Templates'}
                 </button>
               ))}
@@ -1115,9 +1159,9 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
                   const Icon = template.icon
                   return (
                     <button key={template.id} onClick={() => handleInsertTemplate(template)}
-                      className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:border-blue-300 hover:bg-blue-50 transition-all text-left">
-                      <div className="w-10 h-10 bg-blue-50 rounded-lg flex items-center justify-center flex-shrink-0">
-                        <Icon className="w-5 h-5 text-blue-600" />
+                      className="flex items-center gap-3 p-4 rounded-xl shadow-md hover:shadow-lg transition-all text-left">
+                      <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0">
+                        <Icon className="w-5 h-5 text-white" />
                       </div>
                       <span className="text-sm font-medium text-gray-900">{template.name}</span>
                     </button>
