@@ -360,7 +360,8 @@ function LoginPage({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-8">
+    <div className="min-h-screen bg-white flex flex-col p-8">
+      <div className="flex-1 flex items-center justify-center">
       <div className="w-full max-w-6xl flex items-center gap-16">
         {/* Left Side - Form */}
         <div className="w-full max-w-md">
@@ -641,15 +642,6 @@ function LoginPage({ onLogin }) {
           </form>
         </div>
 
-          {/* Footer */}
-          <div className="mt-6">
-            <p className="text-xs text-gray-600">
-              By continuing, you agree to pmail's{' '}
-              <button type="button" onClick={() => setShowTerms(true)} className="text-blue-600 hover:underline">Terms of Service</button>
-              {' & '}
-              <button type="button" onClick={() => setShowPrivacy(true)} className="text-blue-600 hover:underline">Privacy Policy</button>
-            </p>
-          </div>
         </div>
 
         {/* Right Side - Large Pmail Branding */}
@@ -663,6 +655,17 @@ function LoginPage({ onLogin }) {
             </p>
           </div>
         </div>
+      </div>
+      </div>
+
+      {/* Footer - pinned to bottom right */}
+      <div className="text-right pb-2">
+        <p className="text-xs text-gray-400">
+          By continuing, you agree to pmail's{' '}
+          <button type="button" onClick={() => setShowTerms(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Terms of Service</button>
+          {' & '}
+          <button type="button" onClick={() => setShowPrivacy(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Privacy Policy</button>
+        </p>
       </div>
     </div>
   )
