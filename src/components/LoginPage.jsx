@@ -1,5 +1,5 @@
-import React, { useState } from 'react'
-import { Mail, Eye, EyeOff, ArrowLeft } from 'lucide-react'
+import React, { useState, useEffect } from 'react'
+import { Mail, Eye, EyeOff, ArrowLeft, CheckCircle } from 'lucide-react'
 import OnboardingFlow from './OnboardingFlow'
 import TermsOfService from './TermsOfService'
 import PrivacyPolicy from './PrivacyPolicy'
@@ -18,6 +18,66 @@ function LoginPage({ onLogin }) {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // ── Forgot / Reset password state ──────────────────────────────────────────
+  const [view, setView] = useState('auth') // 'auth' | 'forgot' | 'reset'
+  const [forgotEmail, setForgotEmail] = useState('')
+  const [forgotSent, setForgotSent] = useState(false)
+  const [resetToken, setResetToken] = useState('')
+  const [resetPassword, setResetPassword] = useState('')
+  const [resetConfirm, setResetConfirm] = useState('')
+  const [showResetPassword, setShowResetPassword] = useState(false)
+  const [showResetConfirm, setShowResetConfirm] = useState(false)
+  const [resetDone, setResetDone] = useState(false)
+  const [tokenValid, setTokenValid] = useState(null) // null=checking, true, false
+
+  // Check URL for reset token on mount
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const token = params.get('token')
+    if (token) {
+      setResetToken(token)
+      setView('reset')
+      // Verify token is still valid
+      authAPI.verifyResetToken(token)
+        .then(data => setTokenValid(data.valid))
+        .catch(() => setTokenValid(false))
+    }
+  }, [])
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault()
+    if (!forgotEmail.trim()) { setError('Please enter your username or email'); return }
+    setLoading(true)
+    setError('')
+    try {
+      await authAPI.forgotPassword(forgotEmail.trim())
+      setForgotSent(true)
+    } catch (err) {
+      setError(err.message || 'Failed to send reset email')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  const handleResetPassword = async (e) => {
+    e.preventDefault()
+    if (!resetPassword) { setError('Please enter a new password'); return }
+    if (resetPassword.length < 8) { setError('Password must be at least 8 characters'); return }
+    if (resetPassword !== resetConfirm) { setError('Passwords do not match'); return }
+    setLoading(true)
+    setError('')
+    try {
+      await authAPI.resetPassword(resetToken, resetPassword)
+      setResetDone(true)
+      // Clean the token from the URL without reloading
+      window.history.replaceState({}, '', window.location.pathname)
+    } catch (err) {
+      setError(err.message || 'Failed to reset password')
+    } finally {
+      setLoading(false)
+    }
+  }
 
   const handleNext = async (e) => {
     e.preventDefault()
@@ -110,7 +170,7 @@ function LoginPage({ onLogin }) {
 
   // If showing onboarding flow, render that instead
   if (showOnboarding && !isLogin) {
-    return <OnboardingFlow onComplete={onLogin} />;
+    return <OnboardingFlow onComplete={onLogin} onBack={() => setShowOnboarding(false)} />;
   }
 
   if (showTerms) {
@@ -119,6 +179,184 @@ function LoginPage({ onLogin }) {
 
   if (showPrivacy) {
     return <PrivacyPolicy onBack={() => setShowPrivacy(false)} />
+  }
+
+  // ── Forgot Password View ────────────────────────────────────────────────────
+  if (view === 'forgot') {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-8">
+        <div className="w-full max-w-6xl flex items-center gap-16">
+          <div className="w-full max-w-md">
+            <div className="rounded-3xl p-8">
+              <button
+                onClick={() => { setView('auth'); setForgotSent(false); setForgotEmail(''); setError('') }}
+                className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-6"
+              >
+                <ArrowLeft className="w-4 h-4" /> Back to sign in
+              </button>
+
+              {forgotSent ? (
+                <div className="text-center py-4">
+                  <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-normal text-gray-900 mb-2">Check your email</h2>
+                  <p className="text-sm text-gray-600 mb-2">
+                    If an account exists for <strong>{forgotEmail}</strong>, we sent a password reset link to that address.
+                  </p>
+                  <p className="text-sm text-gray-500">The link expires in 1 hour.</p>
+                  <button
+                    onClick={() => { setView('auth'); setForgotSent(false); setForgotEmail(''); setError('') }}
+                    className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium text-sm"
+                  >
+                    Back to sign in
+                  </button>
+                </div>
+              ) : (
+                <>
+                  <h2 className="text-2xl font-normal text-gray-900 mb-2">Forgot password?</h2>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Enter your username or email and we'll send you a reset link.
+                  </p>
+                  {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+                  <form onSubmit={handleForgotPassword} className="space-y-4">
+                    <div className="flex items-center gap-3">
+                      <input
+                        type="text"
+                        value={forgotEmail}
+                        onChange={e => setForgotEmail(e.target.value)}
+                        className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
+                        placeholder="Username or email"
+                        autoFocus
+                      />
+                      <button
+                        type="submit"
+                        disabled={loading}
+                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                      >
+                        {loading ? 'Sending...' : 'Send link'}
+                      </button>
+                    </div>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="hidden lg:flex flex-1 items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-9xl font-bold text-blue-600 tracking-tight lowercase" style={{ fontFamily: "'Jost', sans-serif" }}>pmail</h2>
+              <p className="mt-4 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
+  }
+
+  // ── Reset Password View ─────────────────────────────────────────────────────
+  if (view === 'reset') {
+    return (
+      <div className="min-h-screen bg-white flex items-center justify-center p-8">
+        <div className="w-full max-w-6xl flex items-center gap-16">
+          <div className="w-full max-w-md">
+            <div className="rounded-3xl p-8">
+
+              {/* Checking token */}
+              {tokenValid === null && (
+                <p className="text-sm text-gray-600">Verifying your reset link…</p>
+              )}
+
+              {/* Invalid / expired token */}
+              {tokenValid === false && (
+                <div className="text-center py-4">
+                  <div className="w-12 h-12 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                    <span className="text-red-500 text-2xl">✕</span>
+                  </div>
+                  <h2 className="text-2xl font-normal text-gray-900 mb-2">Link expired</h2>
+                  <p className="text-sm text-gray-600 mb-6">This reset link is invalid or has expired. Please request a new one.</p>
+                  <button
+                    onClick={() => { setView('forgot'); setTokenValid(null); setError('') }}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium text-sm"
+                  >
+                    Request new link
+                  </button>
+                </div>
+              )}
+
+              {/* Success */}
+              {tokenValid === true && resetDone && (
+                <div className="text-center py-4">
+                  <CheckCircle className="w-12 h-12 text-green-500 mx-auto mb-4" />
+                  <h2 className="text-2xl font-normal text-gray-900 mb-2">Password updated!</h2>
+                  <p className="text-sm text-gray-600 mb-6">Your password has been changed. You can now sign in with your new password.</p>
+                  <button
+                    onClick={() => { setView('auth'); setResetDone(false); setResetToken(''); setError('') }}
+                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium text-sm"
+                  >
+                    Sign in
+                  </button>
+                </div>
+              )}
+
+              {/* Reset form */}
+              {tokenValid === true && !resetDone && (
+                <>
+                  <h2 className="text-2xl font-normal text-gray-900 mb-2">Set new password</h2>
+                  <p className="text-sm text-gray-600 mb-6">Choose a new password for your account.</p>
+                  {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
+                  <form onSubmit={handleResetPassword} className="space-y-4">
+                    {/* New password */}
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">New password</label>
+                      <div className="flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
+                        <input
+                          type={showResetPassword ? 'text' : 'password'}
+                          value={resetPassword}
+                          onChange={e => setResetPassword(e.target.value)}
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none"
+                          placeholder="At least 8 characters"
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="pr-3 text-gray-500 hover:text-gray-700">
+                          {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    {/* Confirm password */}
+                    <div>
+                      <label className="block text-sm text-gray-700 mb-1">Confirm password</label>
+                      <div className="flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
+                        <input
+                          type={showResetConfirm ? 'text' : 'password'}
+                          value={resetConfirm}
+                          onChange={e => setResetConfirm(e.target.value)}
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none"
+                          placeholder="Repeat new password"
+                        />
+                        <button type="button" onClick={() => setShowResetConfirm(!showResetConfirm)} className="pr-3 text-gray-500 hover:text-gray-700">
+                          {showResetConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </div>
+                    <button
+                      type="submit"
+                      disabled={loading}
+                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm"
+                    >
+                      {loading ? 'Updating...' : 'Update password'}
+                    </button>
+                  </form>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="hidden lg:flex flex-1 items-center justify-center">
+            <div className="text-center">
+              <h2 className="text-9xl font-bold text-blue-600 tracking-tight lowercase" style={{ fontFamily: "'Jost', sans-serif" }}>pmail</h2>
+              <p className="mt-4 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    )
   }
 
   return (
@@ -171,7 +409,7 @@ function LoginPage({ onLogin }) {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
                     placeholder={isLogin ? 'Username or email' : 'Email'}
                     autoFocus
                   />
@@ -241,6 +479,15 @@ function LoginPage({ onLogin }) {
                       <p className="mt-2 text-xs text-gray-600">
                         Use 8 or more characters with a mix of letters, numbers & symbols
                       </p>
+                    )}
+                    {isLogin && (
+                      <button
+                        type="button"
+                        onClick={() => { setView('forgot'); setError(''); setForgotEmail(formData.email || '') }}
+                        className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                      >
+                        Forgot password?
+                      </button>
                     )}
                   </div>
                   <button

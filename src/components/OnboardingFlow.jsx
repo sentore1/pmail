@@ -63,7 +63,7 @@ const COUNTRY_DIAL = {
 
 const COUNTRIES = Object.keys(COUNTRY_DIAL).sort()
 
-function OnboardingFlow({ onComplete }) {
+function OnboardingFlow({ onComplete, onBack }) {
   const [step, setStep] = useState(1)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
@@ -278,7 +278,7 @@ function OnboardingFlow({ onComplete }) {
     }
   }
 
-  const inputCls = 'w-full max-w-xs px-3 py-2 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
+  const inputCls = 'w-full max-w-xs px-3 py-2 border-0 rounded-2xl focus:outline-none text-sm bg-gray-100 placeholder-gray-400'
   const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
 
   return (
@@ -288,7 +288,12 @@ function OnboardingFlow({ onComplete }) {
         {/* Form */}
         <div className="w-full max-w-md">
           <div className="rounded-3xl p-8">
-            {step > 1 && (
+            {step === 1 ? (
+              <button onClick={onBack}
+                className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-4">
+                <ArrowLeft className="w-4 h-4" /> Back
+              </button>
+            ) : (
               <button onClick={() => { setError(''); setStep(s => s - 1) }}
                 className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-4">
                 <ArrowLeft className="w-4 h-4" /> Back

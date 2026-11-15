@@ -125,3 +125,69 @@ export const sendExternalEmail = async ({ to, senderName, subject, body, replyUr
 
   return info;
 };
+
+/**
+ * Build the HTML body for the password reset email.
+ */
+const buildPasswordResetHtml = ({ name, resetUrl }) => `
+  <div style="max-width:600px;margin:0 auto;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;">
+    <div style="background:#2563eb;padding:24px 32px;border-radius:8px 8px 0 0;">
+      <h1 style="color:#fff;font-size:22px;margin:0;font-weight:700;letter-spacing:-0.5px;">pryro</h1>
+      <p style="color:#bfdbfe;font-size:13px;margin:4px 0 0;">Password Reset Request</p>
+    </div>
+    <div style="border:1px solid #e5e7eb;border-top:none;border-radius:0 0 8px 8px;padding:32px;">
+      <h2 style="font-size:18px;color:#111827;margin:0 0 12px;">Hi ${name},</h2>
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 8px;">
+        We received a request to reset the password for your Pryro account.
+      </p>
+      <p style="font-size:15px;color:#374151;line-height:1.6;margin:0 0 24px;">
+        Click the button below to choose a new password. This link expires in <strong>1 hour</strong>.
+      </p>
+      <a href="${resetUrl}"
+         style="display:inline-block;background:#2563eb;color:#fff;text-decoration:none;
+                padding:12px 32px;border-radius:6px;font-size:15px;font-weight:600;">
+        Reset my password
+      </a>
+      <hr style="border:none;border-top:1px solid #e5e7eb;margin:32px 0;" />
+      <p style="color:#6b7280;font-size:13px;margin:0 0 8px;">
+        If you didn't request a password reset, you can safely ignore this email —
+        your password will not change.
+      </p>
+      <p style="color:#6b7280;font-size:13px;margin:0;">
+        For security, this link can only be used once and expires after 1 hour.
+      </p>
+    </div>
+    <p style="text-align:center;color:#9ca3af;font-size:12px;margin:24px 0;">
+      Pryro Mail — privacy-focused email
+    </p>
+  </div>`;
+
+/**
+ * Send a password reset email to a Pryro user.
+ *
+ * @param {object} params
+ * @param {string} params.to       — user's pryro.com email address
+ * @param {string} params.name     — user's display name
+ * @param {string} params.resetUrl — full reset URL containing the token
+ */
+export const sendPasswordResetEmail = async ({ to, name, resetUrl }) => {
+  const transport = await getTransporter();
+
+  const fromName = process.env.SMTP_FROM_NAME || 'Pryro Mail';
+  const fromEmail = process.env.SMTP_FROM_EMAIL || 'noreply@pryro.com';
+
+  const info = await transport.sendMail({
+    from: `"${fromName}" <${fromEmail}>`,
+    to,
+    subject: 'Reset your Pryro password',
+    html: buildPasswordResetHtml({ name, resetUrl }),
+    text: `Hi ${name},\n\nWe received a request to reset your Pryro password.\n\nClick this link to reset it (expires in 1 hour):\n${resetUrl}\n\nIf you didn't request this, ignore this email — your password won't change.`,
+  });
+
+  if (etherealInfo) {
+    const previewUrl = nodemailer.getTestMessageUrl(info);
+    console.log(`📧 Password reset email preview: ${previewUrl}`);
+  }
+
+  return info;
+};

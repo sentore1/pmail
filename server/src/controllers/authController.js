@@ -1,7 +1,9 @@
 import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 import { generateToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
+import { sendPasswordResetEmail } from '../services/emailService.js';
 
 // ── POST /api/auth/check-username ─────────────────────────────────────────────
 export const checkUsername = async (req, res) => {
@@ -132,5 +134,102 @@ export const getMe = async (req, res) => {
   } catch (error) {
     console.error('Get user error:', error);
     res.status(500).json({ error: 'Failed to get user' });
+  }
+};
+
+// ── POST /api/auth/forgot-password ───────────────────────────────────────────
+export const forgotPassword = async (req, res) => {
+  try {
+    const { email } = req.body;
+    if (!email) return res.status(400).json({ error: 'Email or username is required' });
+
+    // Accept both "john" and "john@pryro.com"
+    const lookupEmail = email.includes('@') ? email.toLowerCase() : `${email.toLowerCase()}@pryro.com`;
+
+    const user = await prisma.user.findUnique({ where: { email: lookupEmail } });
+
+    // Always respond with success — never reveal whether the account exists
+    if (!user) {
+      return res.json({ message: 'If that account exists, a reset link has been sent.' });
+    }
+
+    // Invalidate any existing unused tokens for this user
+    await prisma.passwordResetToken.deleteMany({
+      where: { userId: user.id, usedAt: null },
+    });
+
+    // Generate a secure token — expires in 1 hour
+    const token = crypto.randomBytes(32).toString('hex');
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    await prisma.passwordResetToken.create({
+      data: { userId: user.id, token, expiresAt },
+    });
+
+    const appUrl = process.env.APP_URL || 'http://localhost:5173';
+    const resetUrl = `${appUrl}/reset-password?token=${token}`;
+
+    await sendPasswordResetEmail({ to: user.email, name: user.name, resetUrl });
+
+    res.json({ message: 'If that account exists, a reset link has been sent.' });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({ error: 'Failed to process request' });
+  }
+};
+
+// ── POST /api/auth/reset-password ─────────────────────────────────────────────
+export const resetPassword = async (req, res) => {
+  try {
+    const { token, password } = req.body;
+
+    if (!token) return res.status(400).json({ error: 'Reset token is required' });
+    if (!password) return res.status(400).json({ error: 'New password is required' });
+    if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+    const record = await prisma.passwordResetToken.findUnique({ where: { token } });
+
+    if (!record) return res.status(400).json({ error: 'Invalid or expired reset link' });
+    if (record.usedAt) return res.status(400).json({ error: 'This reset link has already been used' });
+    if (new Date() > record.expiresAt) return res.status(400).json({ error: 'Reset link has expired. Please request a new one.' });
+
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Update password and mark token as used in a transaction
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: record.userId },
+        data: { password: hashedPassword },
+      }),
+      prisma.passwordResetToken.update({
+        where: { token },
+        data: { usedAt: new Date() },
+      }),
+    ]);
+
+    res.json({ message: 'Password updated successfully. You can now sign in.' });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({ error: 'Failed to reset password' });
+  }
+};
+
+// ── GET /api/auth/verify-reset-token ──────────────────────────────────────────
+// Called by the UI to check if a token is still valid before showing the form
+export const verifyResetToken = async (req, res) => {
+  try {
+    const { token } = req.query;
+    if (!token) return res.status(400).json({ valid: false, error: 'Token is required' });
+
+    const record = await prisma.passwordResetToken.findUnique({ where: { token } });
+
+    if (!record || record.usedAt || new Date() > record.expiresAt) {
+      return res.json({ valid: false, error: 'Invalid or expired reset link' });
+    }
+
+    res.json({ valid: true });
+  } catch (error) {
+    console.error('Verify token error:', error);
+    res.status(500).json({ valid: false, error: 'Failed to verify token' });
   }
 };

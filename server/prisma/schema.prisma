@@ -64,6 +64,9 @@ model User {
   // Pay-to-reply invitations sent by this user to external addresses
   payToReplyInvitations  PayToReplyInvitation[]
 
+  // Password reset tokens
+  passwordResetTokens    PasswordResetToken[]
+
   @@index([email])
 }
 
@@ -250,6 +253,19 @@ model Transaction {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+model PasswordResetToken {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  token     String   @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime @default(now())
+
+  @@index([token])
+  @@index([userId])
 }
 
 model Invitation {
