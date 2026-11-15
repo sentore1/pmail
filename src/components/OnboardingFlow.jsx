@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { ArrowLeft, Eye, EyeOff, Loader2, Check, X } from 'lucide-react'
 import { authAPI } from '../services/api'
+import TermsOfService from './TermsOfService'
+import PrivacyPolicy from './PrivacyPolicy'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -65,6 +67,8 @@ const COUNTRIES = Object.keys(COUNTRY_DIAL).sort()
 
 function OnboardingFlow({ onComplete, onBack }) {
   const [step, setStep] = useState(1)
+  const [showTerms, setShowTerms] = useState(false)
+  const [showPrivacy, setShowPrivacy] = useState(false)
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
@@ -282,12 +286,19 @@ function OnboardingFlow({ onComplete, onBack }) {
   const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
 
   return (
-    <div className="min-h-screen bg-white flex items-center justify-center p-8">
+    <div className="min-h-screen bg-white flex flex-col p-8">
+      {showTerms && <TermsOfService onBack={() => setShowTerms(false)} />}
+      {showPrivacy && <PrivacyPolicy onBack={() => setShowPrivacy(false)} />}
+      {!showTerms && !showPrivacy && (<>
+      <div className="flex-1 flex items-center justify-center">
       <div className="w-full max-w-6xl flex items-center gap-16">
 
         {/* Form */}
         <div className="w-full max-w-md">
           <div className="rounded-3xl p-8">
+            <div className="mb-10">
+              <img src="/pryro logo.png" alt="Pmail logo" className="w-14 h-14 object-contain" />
+            </div>
             {step === 1 ? (
               <button onClick={onBack}
                 className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-4">
@@ -476,24 +487,30 @@ function OnboardingFlow({ onComplete, onBack }) {
           </div>
 
           <div className="mt-2 px-8">
-            <p className="text-xs text-gray-600">
-              By continuing, you agree to Pmail's{' '}
-              <a href="#" className="text-blue-600 hover:underline">Terms of Service</a>
-              {' & '}
-              <a href="#" className="text-blue-600 hover:underline">Privacy Policy</a>
-            </p>
           </div>
         </div>
 
         {/* Branding */}
         <div className="hidden lg:flex flex-1 items-center justify-center">
           <div className="text-center">
-            <h2 className="text-9xl font-bold text-blue-600 tracking-tight lowercase"
-              style={{ fontFamily: "'Jost', sans-serif" }}>pmail</h2>
-            <p className="mt-4 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+            <h2 className="text-9xl text-blue-600 tracking-tight"
+              style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
+            <p className="mt-1 text-xl text-gray-600 font-light">Professional email with Knocc</p>
           </div>
         </div>
       </div>
+      </div>
+
+      {/* Footer - pinned to bottom left */}
+      <div className="text-left pb-2">
+        <p className="text-xs text-gray-400">
+          By continuing, you agree to Pmail's{' '}
+          <button type="button" onClick={() => setShowTerms(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Terms of Service</button>
+          {' & '}
+          <button type="button" onClick={() => setShowPrivacy(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Privacy Policy</button>
+        </p>
+      </div>
+      </>)}
     </div>
   )
 }

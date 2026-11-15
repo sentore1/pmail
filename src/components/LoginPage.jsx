@@ -188,6 +188,9 @@ function LoginPage({ onLogin }) {
         <div className="w-full max-w-6xl flex items-center gap-16">
           <div className="w-full max-w-md">
             <div className="rounded-3xl p-8">
+              <div className="mb-6">
+                <img src="/pryro logo.png" alt="Pmail logo" className="w-14 h-14 object-contain" />
+              </div>
               <button
                 onClick={() => { setView('auth'); setForgotSent(false); setForgotEmail(''); setError('') }}
                 className="flex items-center gap-1 text-gray-900 hover:text-black text-sm mb-6"
@@ -203,12 +206,6 @@ function LoginPage({ onLogin }) {
                     If an account exists for <strong>{forgotEmail}</strong>, we sent a password reset link to that address.
                   </p>
                   <p className="text-sm text-gray-500">The link expires in 1 hour.</p>
-                  <button
-                    onClick={() => { setView('auth'); setForgotSent(false); setForgotEmail(''); setError('') }}
-                    className="mt-6 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium text-sm"
-                  >
-                    Back to sign in
-                  </button>
                 </div>
               ) : (
                 <>
@@ -223,14 +220,14 @@ function LoginPage({ onLogin }) {
                         type="text"
                         value={forgotEmail}
                         onChange={e => setForgotEmail(e.target.value)}
-                        className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
+                        className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
                         placeholder="Username or email"
                         autoFocus
                       />
                       <button
                         type="submit"
                         disabled={loading}
-                        className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                        className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
                       >
                         {loading ? 'Sending...' : 'Send link'}
                       </button>
@@ -242,8 +239,8 @@ function LoginPage({ onLogin }) {
           </div>
           <div className="hidden lg:flex flex-1 items-center justify-center">
             <div className="text-center">
-              <h2 className="text-9xl font-bold text-blue-600 tracking-tight lowercase" style={{ fontFamily: "'Jost', sans-serif" }}>pmail</h2>
-              <p className="mt-4 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+              <h2 className="tracking-tight" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
+              <p className="mt-1 text-xl text-gray-600 font-light">Professional email with Knocc</p>
             </div>
           </div>
         </div>
@@ -258,6 +255,9 @@ function LoginPage({ onLogin }) {
         <div className="w-full max-w-6xl flex items-center gap-16">
           <div className="w-full max-w-md">
             <div className="rounded-3xl p-8">
+              <div className="mb-6">
+                <img src="/pryro logo.png" alt="Pmail logo" className="w-14 h-14 object-contain" />
+              </div>
 
               {/* Checking token */}
               {tokenValid === null && (
@@ -274,7 +274,7 @@ function LoginPage({ onLogin }) {
                   <p className="text-sm text-gray-600 mb-6">This reset link is invalid or has expired. Please request a new one.</p>
                   <button
                     onClick={() => { setView('forgot'); setTokenValid(null); setError('') }}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium text-sm"
+                    className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] text-white rounded-2xl font-medium text-sm"
                   >
                     Request new link
                   </button>
@@ -289,7 +289,7 @@ function LoginPage({ onLogin }) {
                   <p className="text-sm text-gray-600 mb-6">Your password has been changed. You can now sign in with your new password.</p>
                   <button
                     onClick={() => { setView('auth'); setResetDone(false); setResetToken(''); setError('') }}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-2xl font-medium text-sm"
+                    className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] text-white rounded-2xl font-medium text-sm"
                   >
                     Sign in
                   </button>
@@ -311,7 +311,7 @@ function LoginPage({ onLogin }) {
                           type={showResetPassword ? 'text' : 'password'}
                           value={resetPassword}
                           onChange={e => setResetPassword(e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-500"
                           placeholder="At least 8 characters"
                           autoFocus
                         />
@@ -328,7 +328,7 @@ function LoginPage({ onLogin }) {
                           type={showResetConfirm ? 'text' : 'password'}
                           value={resetConfirm}
                           onChange={e => setResetConfirm(e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-500"
                           placeholder="Repeat new password"
                         />
                         <button type="button" onClick={() => setShowResetConfirm(!showResetConfirm)} className="pr-3 text-gray-500 hover:text-gray-700">
@@ -339,7 +339,7 @@ function LoginPage({ onLogin }) {
                     <button
                       type="submit"
                       disabled={loading}
-                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm"
+                      className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm"
                     >
                       {loading ? 'Updating...' : 'Update password'}
                     </button>
@@ -350,8 +350,8 @@ function LoginPage({ onLogin }) {
           </div>
           <div className="hidden lg:flex flex-1 items-center justify-center">
             <div className="text-center">
-              <h2 className="text-9xl font-bold text-blue-600 tracking-tight lowercase" style={{ fontFamily: "'Jost', sans-serif" }}>pmail</h2>
-              <p className="mt-4 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+              <h2 className="tracking-tight" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
+              <p className="mt-1 text-xl text-gray-600 font-light">Professional email with Knocc</p>
             </div>
           </div>
         </div>
@@ -360,17 +360,17 @@ function LoginPage({ onLogin }) {
   }
 
   return (
-    <div className="min-h-screen bg-white flex flex-col p-8">
+    <div className="relative min-h-screen bg-white flex flex-col p-8">
       <div className="flex-1 flex items-center justify-center">
       <div className="w-full max-w-6xl flex items-center gap-16">
         {/* Left Side - Form */}
         <div className="w-full max-w-md">
-          {/* Logo - Top Left */}
-          <div className="mb-12">
-          </div>
-
           {/* Card */}
           <div className="rounded-3xl p-8">
+          {/* Logo above Sign in */}
+          <div className="mb-10">
+            <img src="/pryro logo.png" alt="Pmail logo" className="w-14 h-14 object-contain" />
+          </div>
           {/* Back Button */}
           {step > 1 && (
             <button
@@ -410,14 +410,14 @@ function LoginPage({ onLogin }) {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
+                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
                     placeholder={isLogin ? 'Username or email' : 'Email'}
                     autoFocus
                   />
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                    className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
                   >
                     Next
                   </button>
@@ -425,7 +425,7 @@ function LoginPage({ onLogin }) {
                 <button
                   type="button"
                   onClick={switchMode}
-                  className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                  className="mt-3 text-sm font-medium hover:opacity-80" style={{ color: '#0184ff' }}
                 >
                   {isLogin ? 'Create account' : 'Sign in instead'}
                 </button>
@@ -448,7 +448,7 @@ function LoginPage({ onLogin }) {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
                       placeholder="First and last name"
                       autoFocus
                     />
@@ -464,7 +464,7 @@ function LoginPage({ onLogin }) {
                         value={formData.password}
                         onChange={handleChange}
                         required
-                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-500"
                         placeholder={isLogin ? 'Enter your password' : 'Create a password'}
                         autoFocus={isLogin}
                       />
@@ -485,7 +485,7 @@ function LoginPage({ onLogin }) {
                       <button
                         type="button"
                         onClick={() => { setView('forgot'); setError(''); setForgotEmail(formData.email || '') }}
-                        className="mt-2 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                        className="mt-2 text-sm font-medium hover:opacity-80" style={{ color: '#0184ff' }}
                       >
                         Forgot password?
                       </button>
@@ -494,7 +494,7 @@ function LoginPage({ onLogin }) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                    className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
                   >
                     {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Next'}
                   </button>
@@ -515,7 +515,7 @@ function LoginPage({ onLogin }) {
                       name="phoneNumber"
                       value={formData.phoneNumber}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
                       placeholder="+1234567890"
                     />
                   </div>
@@ -526,7 +526,7 @@ function LoginPage({ onLogin }) {
                       name="age"
                       value={formData.age}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
                       placeholder="25"
                     />
                   </div>
@@ -622,7 +622,7 @@ function LoginPage({ onLogin }) {
                       onChange={handleChange}
                       min="1"
                       step="0.01"
-                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
                       placeholder="1.00"
                     />
                     <p className="mt-1 text-xs text-gray-600">
@@ -647,10 +647,10 @@ function LoginPage({ onLogin }) {
         {/* Right Side - Large Pmail Branding */}
         <div className="hidden lg:flex flex-1 items-center justify-center">
           <div className="text-center">
-            <h2 className="text-9xl font-bold text-blue-600 tracking-tight lowercase" style={{ fontFamily: "'Jost', sans-serif" }}>
+            <h2 className="tracking-tight" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>
               pmail
             </h2>
-            <p className="mt-4 text-xl text-gray-600 font-light">
+            <p className="mt-1 text-xl text-gray-600 font-light">
               Professional email with Knocc
             </p>
           </div>
@@ -659,7 +659,7 @@ function LoginPage({ onLogin }) {
       </div>
 
       {/* Footer - pinned to bottom right */}
-      <div className="text-right pb-2">
+      <div className="text-left pb-2">
         <p className="text-xs text-gray-400">
           By continuing, you agree to pmail's{' '}
           <button type="button" onClick={() => setShowTerms(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Terms of Service</button>
