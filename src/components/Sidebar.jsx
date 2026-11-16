@@ -136,12 +136,12 @@ function Sidebar({
         )}
 
         {/* Horizontal icon row */}
-        <div className="flex items-center gap-1 px-1">
+        <div className="flex items-center gap-1.5 px-1">
           {/* Avatar / profile toggle */}
           <button
             onClick={() => setShowProfileMenu((v) => !v)}
             title={user?.name || 'Profile'}
-            className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:bg-blue-700 transition-colors"
+            className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-bold flex-shrink-0 hover:bg-blue-700 transition-colors"
           >
             {user?.name?.charAt(0).toUpperCase() || 'U'}
           </button>
@@ -149,25 +149,41 @@ function Sidebar({
           <button
             onClick={onShowWallet}
             title="Wallet"
-            className="p-1.5 text-gray-500 hover:bg-gray-200/70 hover:text-gray-800 rounded-lg transition-all"
+            className="p-1.5 text-[#707782] hover:bg-[#E2E5EA] hover:text-[#202124] rounded-lg transition-all"
           >
-            <Wallet className="w-3.5 h-3.5" />
+            <Wallet className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={() => onNavigate('contacts')}
+            title="Contacts"
+            className="p-1.5 text-[#707782] hover:bg-[#E2E5EA] hover:text-[#202124] rounded-lg transition-all"
+          >
+            <Users className="w-4 h-4" />
+          </button>
+
+          <button
+            onClick={onShowKnoccRequests}
+            title="Knocc Requests"
+            className="p-1.5 text-[#707782] hover:bg-[#E2E5EA] hover:text-[#202124] rounded-lg transition-all"
+          >
+            <Bell className="w-4 h-4" />
           </button>
 
           <button
             onClick={onShowSettings}
             title="Settings"
-            className="p-1.5 text-gray-500 hover:bg-gray-200/70 hover:text-gray-800 rounded-lg transition-all"
+            className="p-1.5 text-[#707782] hover:bg-[#E2E5EA] hover:text-[#202124] rounded-lg transition-all"
           >
-            <Settings className="w-3.5 h-3.5" />
+            <Settings className="w-4 h-4" />
           </button>
 
           <button
             onClick={onLogout}
             title="Logout"
-            className="p-1.5 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-all"
+            className="p-1.5 text-[#707782] hover:bg-red-100 hover:text-red-600 rounded-lg transition-all"
           >
-            <LogOut className="w-3.5 h-3.5" />
+            <LogOut className="w-4 h-4" />
           </button>
         </div>
       </div>
