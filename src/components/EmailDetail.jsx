@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react'
-import { HelpCircle, User, CheckCircle, XCircle, Bell, Search, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, Send, Loader2 } from 'lucide-react'
+import { User, CheckCircle, XCircle, Bell, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react'
 import DOMPurify from 'dompurify'
 import { knoccAPI, userAPI, emailAPI, walletAPI } from '../services/api'
+import ComposeModal from './ComposeModal'
 
 // Instagram/Twitter-style verification badge
 const VerifiedBadge = ({ className = "w-4 h-4" }) => (
@@ -14,7 +15,6 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
   const isRequestView = viewType === 'knocc-requests'
   const isBinView = viewType === 'bin'
 
-  // ── All hooks must be here — before any early returns ────────────────────
   const [peopleTab, setPeopleTab] = useState('who-you-know')
   const [allPeople, setAllPeople] = useState([])
   const [whoYouKnowPeople, setWhoYouKnowPeople] = useState([])
@@ -24,30 +24,27 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
   const [knoccReason, setKnoccReason] = useState('')
   const [actionError, setActionError] = useState('')
   const [walletBalance, setWalletBalance] = useState(null)
-  // IDs of users we've already sent a Knocc request to (or are contacts with)
   const [sentKnoccIds, setSentKnoccIds] = useState(new Set())
   const [contactIds, setContactIds] = useState(new Set())
   const [peopleSearch, setPeopleSearch] = useState('')
-  const [showSenderInfo, setShowSenderInfo] = useState(false)
 
-  // Thread expand state — which message IDs are open
+  // Inline reply/forward state
+  const [replyMode, setReplyMode] = useState(null) // null | 'reply' | 'forward'
+
   const [expandedIds, setExpandedIds] = useState(() => {
     const t = email?._thread || (email ? [email] : [])
     return new Set(t.length ? [t[t.length - 1].id] : [])
   })
 
-  // Reset expanded state whenever the selected email/thread changes
   useEffect(() => {
     const t = email?._thread || (email ? [email] : [])
     setExpandedIds(new Set(t.length ? [t[t.length - 1].id] : []))
-    setActionError('')  // clear any stale error when switching emails
+    setActionError('')
+    setReplyMode(null)
   }, [email?.id])
 
-  // Fetch people when in Knocc requests view without email selected
   useEffect(() => {
-    if (!email && isRequestView) {
-      fetchPeople()
-    }
+    if (!email && isRequestView) fetchPeople()
   }, [email, isRequestView])
 
   const fetchPeople = async () => {
@@ -58,26 +55,19 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
         knoccAPI.getSentRequests(),
         walletAPI.getBalance(),
       ])
-
-      if (balanceRes.walletBalance !== undefined) {
-        setWalletBalance(balanceRes.walletBalance)
-      }
-
+      if (balanceRes.walletBalance !== undefined) setWalletBalance(balanceRes.walletBalance)
       if (usersRes.users) {
         const approved = contactsRes.contacts || []
         const activeContacts = approved.filter(c => !c.isExpired)
         const expiredContacts = approved.filter(c => c.isExpired)
-
         const activeIds = new Set(activeContacts.map(c => c.id))
         const expiredIds = new Set(expiredContacts.map(c => c.id))
         const sent = sentRes.requests || []
         const sentIds = new Set(sent.map(r => r.recipientId))
-
         setContactIds(activeIds)
         expiredIds.forEach(id => sentIds.delete(id))
         setSentKnoccIds(sentIds)
         setWhoYouKnowPeople(activeContacts.slice(0, 2))
-        const allUserIds = new Set(usersRes.users.map(u => u.id))
         setAllPeople([
           ...expiredContacts.map(c => ({ ...c, _expired: true })),
           ...usersRes.users.filter(u => !activeIds.has(u.id)),
@@ -88,26 +78,14 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     }
   }
 
-  const handleKnoccClick = (person) => {
-    setSelectedPerson(person)
-    setShowKnoccModal(true)
-  }
+  const handleKnoccClick = (person) => { setSelectedPerson(person); setShowKnoccModal(true) }
 
   const handleSendKnocc = async () => {
-    if (!knoccReason.trim()) {
-      setActionError('Please provide a reason')
-      return
-    }
+    if (!knoccReason.trim()) { setActionError('Please provide a reason'); return }
     setActionError('')
     setLoading(true)
     try {
-      await knoccAPI.sendRequest({
-        recipientEmail: selectedPerson.email,
-        reason: knoccReason,
-        message: '',
-        paymentAmount: selectedPerson.knoccPrice,
-      })
-      // Mark this person as already knocced so the button disappears immediately
+      await knoccAPI.sendRequest({ recipientEmail: selectedPerson.email, reason: knoccReason, message: '', paymentAmount: selectedPerson.knoccPrice })
       setSentKnoccIds((prev) => new Set([...prev, selectedPerson.id]))
       setShowKnoccModal(false)
       setKnoccReason('')
@@ -124,13 +102,9 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     setLoading(true)
     try {
       const result = await knoccAPI.respondToRequest(email.id, 'approve')
-      // Close the request view first
       onClose()
       if (onRefresh) onRefresh()
-      // Navigate to inbox and open compose to the sender
-      if (result?.sender && onApproved) {
-        onApproved(result.sender)
-      }
+      if (result?.sender && onApproved) onApproved(result.sender)
     } catch (err) {
       setActionError(err.message || 'Failed to approve request')
       setLoading(false)
@@ -143,7 +117,6 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     setLoading(true)
     try {
       await knoccAPI.respondToRequest(email.id, 'decline')
-      // Close first so the stale item disappears immediately, then refresh
       onClose()
       if (onRefresh) onRefresh()
     } catch (err) {
@@ -156,13 +129,10 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     if (!email) return
     setLoading(true)
     try {
-      if (isBinView) {
-        await emailAPI.permanentlyDeleteEmail(email.id)
-      } else {
-        await emailAPI.deleteEmail(email.id)
-      }
-      onClose()          // clear selected email first
-      setActionError('') // ensure no stale error lingers
+      if (isBinView) await emailAPI.permanentlyDeleteEmail(email.id)
+      else await emailAPI.deleteEmail(email.id)
+      onClose()
+      setActionError('')
       if (onRefresh) onRefresh()
     } catch (err) {
       setActionError(err.message || 'Failed to delete email')
@@ -171,130 +141,87 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     }
   }
 
+  // ── Early return: Knocc people directory (no email selected) ─────────────
   if (!email && isRequestView) {
     const filterPeople = (list) => {
       if (!peopleSearch.trim()) return list
       const q = peopleSearch.toLowerCase()
-      return list.filter(
-        (p) =>
-          (p.name || '').toLowerCase().includes(q) ||
-          (p.email || '').toLowerCase().includes(q) ||
-          (p.profession || '').toLowerCase().includes(q) ||
-          (p.country || '').toLowerCase().includes(q)
+      return list.filter(p =>
+        (p.name || '').toLowerCase().includes(q) ||
+        (p.email || '').toLowerCase().includes(q) ||
+        (p.profession || '').toLowerCase().includes(q) ||
+        (p.country || '').toLowerCase().includes(q)
       )
     }
     const displayedPeople = filterPeople(peopleTab === 'who-you-know' ? whoYouKnowPeople : allPeople)
 
     return (
       <div className="flex-1 flex flex-col bg-white overflow-y-auto">
-        {/* Search Header */}
         <div className="p-5 border-b border-gray-100">
-          <h2 className="text-base font-medium text-gray-900 mb-3">Find People on Pmail</h2>
+          <h2 className="text-base font-semibold text-gray-900 mb-3">Find People on Pmail</h2>
           <div className="relative">
-            <Globe className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-            <input
-              type="text"
-              placeholder="Search by name, email, or profession..."
-              value={peopleSearch}
+            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+            <input type="text" placeholder="Search by name, email, or profession..." value={peopleSearch}
               onChange={(e) => setPeopleSearch(e.target.value)}
-              className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm"
-            />
+              className="w-full pl-9 pr-3 py-1.5 border border-gray-200 rounded-2xl focus:outline-none focus:ring-1 focus:ring-blue-500 text-sm" />
           </div>
         </div>
-
-        {/* Tab Buttons */}
         <div className="px-5 pt-4 pb-2 border-b border-gray-100">
           <div className="flex gap-2">
-            <button
-              onClick={() => setPeopleTab('who-you-know')}
-              className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                peopleTab === 'who-you-know'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              Who You Know
-            </button>
-            <button
-              onClick={() => setPeopleTab('all-people')}
-              className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${
-                peopleTab === 'all-people'
-                  ? 'bg-blue-600 text-white'
-                  : 'text-gray-600 hover:bg-gray-50'
-              }`}
-            >
-              All People
-            </button>
+            {['who-you-know', 'all-people'].map(tab => (
+              <button key={tab} onClick={() => setPeopleTab(tab)}
+                className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${peopleTab === tab ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-50'}`}>
+                {tab === 'who-you-know' ? 'Who You Know' : 'All People'}
+              </button>
+            ))}
           </div>
         </div>
-
-        {/* People Grid */}
         <div className="p-5">
           <div className="grid grid-cols-3 gap-2">
             {displayedPeople.map((person, idx) => {
-              const initials = (person.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
+              const initials = (person.name || '?').split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase()
               const colors = ['from-blue-400 to-blue-600', 'from-purple-400 to-purple-600', 'from-green-400 to-green-600', 'from-orange-400 to-orange-600']
               const color = colors[idx % colors.length]
               return (
-              <div key={person.id || idx} className={`border rounded-xl p-1.5 transition-all ${
-                person._expired
-                  ? 'border-amber-200 hover:border-amber-400 bg-amber-50/30'
-                  : 'border-gray-200 hover:border-blue-300'
-              }`}>
-                <div className="flex items-start justify-between mb-1">
-                  <div className="flex items-center gap-1.5 flex-1 min-w-0">
-                    <div className={`w-7 h-7 bg-gradient-to-br ${color} rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>
-                      {initials}
-                    </div>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-1">
-                        <h3 className="text-xs font-medium text-gray-900 truncate leading-tight">{person.name}</h3>
-                        {person.verified && <VerifiedBadge className="w-3 h-3 flex-shrink-0" />}
+                <div key={person.id || idx} className={`border rounded-2xl p-1.5 transition-all ${person._expired ? 'border-amber-200 hover:border-amber-400 bg-amber-50/30' : 'border-gray-200 hover:border-blue-300'}`}>
+                  <div className="flex items-start justify-between mb-1">
+                    <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                      <div className={`w-7 h-7 bg-gradient-to-br ${color} rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>{initials}</div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1">
+                          <h3 className="text-xs font-medium text-gray-900 truncate leading-tight">{person.name}</h3>
+                          {person.verified && <VerifiedBadge className="w-3 h-3 flex-shrink-0" />}
+                        </div>
+                        <p className="text-xs text-gray-500 truncate leading-tight">{person.country || person.email}</p>
                       </div>
-                      <p className="text-xs text-gray-500 truncate leading-tight">{person.country || person.email}</p>
                     </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-1">
-                    <div className="flex items-center gap-0.5">
-                      <div className={`w-3 h-3 ${person.knoccPrice >= 50 ? 'bg-purple-500' : 'bg-green-500'} rounded-full flex items-center justify-center`}>
-                        <DollarSign className="w-1.5 h-1.5 text-white" strokeWidth={3} />
+                    <div className="flex flex-col items-end gap-0.5 flex-shrink-0 ml-1">
+                      <div className="flex items-center gap-0.5">
+                        <div className={`w-3 h-3 ${person.knoccPrice >= 50 ? 'bg-purple-500' : 'bg-green-500'} rounded-full flex items-center justify-center`}>
+                          <DollarSign className="w-1.5 h-1.5 text-white" strokeWidth={3} />
+                        </div>
+                        <span className="text-xs font-medium text-gray-700">${person.knoccPrice}</span>
                       </div>
-                      <span className="text-xs font-medium text-gray-700">${person.knoccPrice}</span>
+                      {contactIds.has(person.id) ? (
+                        <span className="text-xs text-green-600 font-medium px-2 py-0.5">Chatting</span>
+                      ) : person._expired ? (
+                        <button onClick={() => handleKnoccClick(person)} className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors font-medium">Re-Knocc</button>
+                      ) : sentKnoccIds.has(person.id) ? (
+                        <span className="text-xs text-gray-400 font-medium px-2 py-0.5">Pending</span>
+                      ) : (
+                        <button onClick={() => handleKnoccClick(person)} className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded transition-colors font-medium">Knocc</button>
+                      )}
                     </div>
-                    {contactIds.has(person.id) ? (
-                      <span className="text-xs text-green-600 font-medium px-2 py-0.5">Chatting</span>
-                    ) : person._expired ? (
-                      <button
-                        onClick={() => handleKnoccClick(person)}
-                        title="Chat expired — Knocc again to reconnect"
-                        className="text-xs bg-amber-500 hover:bg-amber-600 text-white px-2 py-0.5 rounded transition-colors font-medium"
-                      >
-                        Re-Knocc
-                      </button>
-                    ) : sentKnoccIds.has(person.id) ? (
-                      <span className="text-xs text-gray-400 font-medium px-2 py-0.5">Pending</span>
-                    ) : (
-                      <button
-                        onClick={() => handleKnoccClick(person)}
-                        className="text-xs bg-blue-600 hover:bg-blue-700 text-white px-2 py-0.5 rounded transition-colors font-medium"
-                      >
-                        Knocc
-                      </button>
-                    )}
                   </div>
                 </div>
-              </div>
               )
             })}
           </div>
           {displayedPeople.length === 0 && (
-            <p className="text-sm text-gray-400 text-center py-6">
-              {peopleSearch.trim() ? 'No people found matching your search' : 'No people found'}
-            </p>
+            <p className="text-sm text-gray-400 text-center py-6">{peopleSearch.trim() ? 'No people found matching your search' : 'No people found'}</p>
           )}
         </div>
 
-        {/* ── Knocc modal — must be inside this early-return block ────────── */}
         {showKnoccModal && selectedPerson && (
           <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
             <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
@@ -303,17 +230,12 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
                   <h2 className="text-base font-semibold text-gray-900">Send Knocc Request</h2>
                   <p className="text-xs text-gray-500 mt-0.5">to {selectedPerson.name}</p>
                 </div>
-                <button
-                  onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason(''); setActionError('') }}
-                  className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors"
-                >
+                <button onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason(''); setActionError('') }} className="p-1.5 hover:bg-gray-100 rounded-lg">
                   <X className="w-4 h-4 text-gray-500" />
                 </button>
               </div>
-
               <div className="p-5 space-y-4">
-                {/* Recipient summary */}
-                <div className="flex items-center gap-3 bg-gray-50 rounded-xl p-3">
+                <div className="flex items-center gap-3 bg-gray-50 rounded-2xl p-3">
                   <div className="w-10 h-10 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-sm font-semibold flex-shrink-0">
                     {(selectedPerson.name || '?').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
                   </div>
@@ -322,66 +244,29 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
                     <p className="text-xs text-gray-500">{selectedPerson.email}</p>
                   </div>
                   <div className="text-right">
-                    <div className="flex items-center gap-1">
-                      <DollarSign className="w-3.5 h-3.5 text-gray-500" />
-                      <span className="text-sm font-bold text-gray-900">{selectedPerson.knoccPrice}</span>
-                    </div>
+                    <div className="flex items-center gap-1"><DollarSign className="w-3.5 h-3.5 text-gray-500" /><span className="text-sm font-bold text-gray-900">{selectedPerson.knoccPrice}</span></div>
                     <p className="text-xs text-gray-400">knocc fee</p>
                   </div>
                 </div>
-
-                {/* Wallet balance check */}
                 {walletBalance !== null && (
-                  <div className={`flex items-center justify-between px-3 py-2 rounded-lg text-sm ${
-                    walletBalance >= selectedPerson.knoccPrice
-                      ? 'bg-green-50 text-green-700'
-                      : 'bg-red-50 text-red-700'
-                  }`}>
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-2xl text-sm ${walletBalance >= selectedPerson.knoccPrice ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                     <span>Your balance: <strong>${walletBalance.toFixed(2)}</strong></span>
-                    {walletBalance < selectedPerson.knoccPrice && (
-                      <span className="text-xs font-medium">
-                        Need ${(selectedPerson.knoccPrice - walletBalance).toFixed(2)} more — add funds from Wallet
-                      </span>
-                    )}
+                    {walletBalance < selectedPerson.knoccPrice && <span className="text-xs font-medium">Need ${(selectedPerson.knoccPrice - walletBalance).toFixed(2)} more — add funds from Wallet</span>}
                   </div>
                 )}
-
-                {/* Reason */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1.5">
-                    Reason for contact <span className="text-red-500">*</span>
-                  </label>
-                  <textarea
-                    value={knoccReason}
-                    onChange={e => setKnoccReason(e.target.value)}
-                    placeholder="Why do you want to contact this person?"
-                    rows={3}
-                    autoFocus
-                    className="w-full px-3 py-2 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm"
-                  />
+                  <label className="block text-sm font-medium text-gray-700 mb-1.5">Reason for contact <span className="text-red-500">*</span></label>
+                  <textarea value={knoccReason} onChange={e => setKnoccReason(e.target.value)} placeholder="Why do you want to contact this person?" rows={3} autoFocus
+                    className="w-full px-3 py-2 border border-gray-300 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none text-sm" />
                 </div>
-
-                {actionError && (
-                  <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-lg">{actionError}</p>
-                )}
+                {actionError && <p className="text-sm text-red-600 bg-red-50 border border-red-200 px-3 py-2 rounded-2xl">{actionError}</p>}
               </div>
-
               <div className="px-5 pb-5 flex gap-3">
-                <button
-                  onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason(''); setActionError('') }}
-                  className="flex-1 py-2 border border-gray-200 rounded-xl text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendKnocc}
-                  disabled={loading || !knoccReason.trim() || (walletBalance !== null && walletBalance < selectedPerson.knoccPrice)}
-                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-xl text-sm font-medium transition-colors flex items-center justify-center gap-2"
-                >
+                <button onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason(''); setActionError('') }} className="flex-1 py-2 border border-gray-200 rounded-2xl text-sm text-gray-700 hover:bg-gray-50">Cancel</button>
+                <button onClick={handleSendKnocc} disabled={loading || !knoccReason.trim() || (walletBalance !== null && walletBalance < selectedPerson.knoccPrice)}
+                  className="flex-1 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white rounded-2xl text-sm font-medium flex items-center justify-center gap-2">
                   {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-                  {loading ? 'Sending…' : walletBalance !== null && walletBalance < selectedPerson.knoccPrice
-                    ? 'Insufficient balance'
-                    : `Send Knocc ($${selectedPerson.knoccPrice})`}
+                  {loading ? 'Sending…' : walletBalance !== null && walletBalance < selectedPerson.knoccPrice ? 'Insufficient balance' : `Send Knocc ($${selectedPerson.knoccPrice})`}
                 </button>
               </div>
             </div>
@@ -391,17 +276,18 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     )
   }
 
+  // ── Empty state ───────────────────────────────────────────────────────────
   if (!email) {
     return (
       <div className="flex-1 flex items-center justify-center bg-white">
         <div className="text-center">
-          <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
-            <User className="w-7 h-7 text-gray-300" />
+          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-3">
+            <User className="w-8 h-8 text-gray-300" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-1">
+          <h3 className="text-base font-semibold text-gray-600 mb-1">
             No {isRequestView ? 'request' : 'email'} selected
           </h3>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-400">
             Select {isRequestView ? 'a request' : 'an email'} to read its contents.
           </p>
         </div>
@@ -409,105 +295,68 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     )
   }
 
+  // ── Knocc request detail view ─────────────────────────────────────────────
   if (isRequestView) {
-    // Real API shape: request.sender.name, request.sender.email, request.reason, request.paymentAmount, request.paymentType, request.status
     const senderName = email.sender?.name || email.senderName || email.sender || 'Unknown'
     const senderEmail = email.sender?.email || email.email || ''
     const country = email.sender?.country || email.additionalInfo?.country || ''
 
     return (
       <div className="flex-1 flex flex-col bg-white">
-        {/* Header */}
         <div className="p-5 border-b border-gray-100">
           <div className="flex items-center justify-between mb-3">
-            <div className="flex items-center gap-2 flex-1">
+            <div className="flex items-center gap-3 flex-1">
               <div className="w-10 h-10 bg-orange-50 rounded-full flex items-center justify-center">
                 <Bell className="w-5 h-5 text-orange-600" />
               </div>
               <div>
-                <h2 className="text-base font-medium text-gray-900">{senderName}</h2>
+                <h2 className="text-base font-semibold text-gray-900">{senderName}</h2>
                 <p className="text-sm text-gray-500">{senderEmail}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <span className="text-xs text-gray-400">
-                {email.createdAt ? new Date(email.createdAt).toLocaleString() : email.timestamp}
-              </span>
-              <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-md transition-colors">
-                <X className="w-5 h-5 text-gray-500" />
-              </button>
+              <span className="text-xs text-gray-400">{email.createdAt ? new Date(email.createdAt).toLocaleString() : email.timestamp}</span>
+              <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5 text-gray-500" /></button>
             </div>
           </div>
         </div>
-
-        {/* Request Details */}
         <div className="flex-1 p-5 overflow-y-auto">
           <div className="max-w-2xl space-y-5">
             <div>
-              <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Request Reason</h3>
-              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md">{email.reason}</p>
+              <h3 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Request Reason</h3>
+              <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-2xl">{email.reason}</p>
             </div>
-
             {email.message && (
               <div>
-                <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Message</h3>
-                <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-md">{email.message}</p>
+                <h3 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Message</h3>
+                <p className="text-sm text-gray-900 bg-gray-50 p-3 rounded-2xl">{email.message}</p>
               </div>
             )}
-
             <div>
-              <h3 className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">Details</h3>
-              <div className="bg-gray-50 p-3 rounded-md space-y-2">
-                {country && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Country:</span>
-                    <span className="text-gray-900 font-medium">{country}</span>
-                  </div>
-                )}
-                {email.paymentType && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Payment type:</span>
-                    <span className={`font-medium ${email.paymentType === 'PRYRO' ? 'text-purple-700' : 'text-green-700'}`}>
-                      {email.paymentType}
-                    </span>
-                  </div>
-                )}
-                {email.paymentAmount != null && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-gray-600">Amount paid:</span>
-                    <span className="font-semibold text-gray-900">${email.paymentAmount}</span>
-                  </div>
-                )}
+              <h3 className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">Details</h3>
+              <div className="bg-gray-50 p-3 rounded-2xl space-y-2">
+                {country && <div className="flex justify-between text-sm"><span className="text-gray-600">Country:</span><span className="text-gray-900 font-medium">{country}</span></div>}
+                {email.paymentType && <div className="flex justify-between text-sm"><span className="text-gray-600">Payment type:</span><span className={`font-medium ${email.paymentType === 'PRYRO' ? 'text-purple-700' : 'text-green-700'}`}>{email.paymentType}</span></div>}
+                {email.paymentAmount != null && <div className="flex justify-between text-sm"><span className="text-gray-600">Amount paid:</span><span className="font-semibold text-gray-900">${email.paymentAmount}</span></div>}
               </div>
             </div>
-
-            {/* Error display */}
             {actionError && (
-              <div className="p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-600 flex items-center gap-2">
-                <XCircle className="w-4 h-4 flex-shrink-0" />
-                {actionError}
+              <div className="p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600 flex items-center gap-2">
+                <XCircle className="w-4 h-4 flex-shrink-0" />{actionError}
               </div>
             )}
-
             {email.status === 'PENDING' && (
               <div className="flex gap-2">
-                <button onClick={handleApproveRequest} disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2.5 px-4 rounded-md transition-colors text-sm font-medium">
-                  <CheckCircle className="w-4 h-4" />
-                  {loading ? 'Processing…' : 'Approve & Add Contact'}
+                <button onClick={handleApproveRequest} disabled={loading} className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700 disabled:bg-green-400 text-white py-2.5 px-4 rounded-2xl text-sm font-medium">
+                  <CheckCircle className="w-4 h-4" />{loading ? 'Processing…' : 'Approve & Add Contact'}
                 </button>
-                <button onClick={handleDeclineRequest} disabled={loading}
-                  className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white py-2.5 px-4 rounded-md transition-colors text-sm font-medium">
-                  <XCircle className="w-4 h-4" />
-                  {loading ? 'Processing…' : 'Decline'}
+                <button onClick={handleDeclineRequest} disabled={loading} className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700 disabled:bg-red-400 text-white py-2.5 px-4 rounded-2xl text-sm font-medium">
+                  <XCircle className="w-4 h-4" />{loading ? 'Processing…' : 'Decline'}
                 </button>
               </div>
             )}
-
             {email.status !== 'PENDING' && (
-              <div className={`p-3 rounded-md text-sm font-medium text-center ${
-                email.status === 'APPROVED' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'
-              }`}>
+              <div className={`p-3 rounded-2xl text-sm font-medium text-center ${email.status === 'APPROVED' ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
                 {email.status === 'APPROVED' ? '✓ Request approved' : '✕ Request declined'}
               </div>
             )}
@@ -517,16 +366,14 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     )
   }
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
   const handleStarEmail = async () => {
     setLoading(true)
     try {
       await emailAPI.starEmail(email.id)
       if (onRefresh) onRefresh()
-    } catch (err) {
-      setActionError(err.message || 'Failed to star email')
-    } finally {
-      setLoading(false)
-    }
+    } catch (err) { setActionError(err.message || 'Failed to star email') }
+    finally { setLoading(false) }
   }
 
   const formatBytes = (bytes) => {
@@ -536,12 +383,11 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
   }
 
-  // The thread is either from the _thread array (grouped) or just the single email
   const thread = email._thread || [email]
   const isThread = thread.length > 1
 
   const toggleExpand = (id) => {
-    setExpandedIds((prev) => {
+    setExpandedIds(prev => {
       const next = new Set(prev)
       if (next.has(id)) next.delete(id)
       else next.add(id)
@@ -549,94 +395,69 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     })
   }
 
-  // Reply/forward uses the LATEST message in the thread
   const latestMsg = thread[thread.length - 1]
 
   const buildReplyContext = () => {
     const senderObj = latestMsg.sender || {}
     const firstRecipient = latestMsg.recipients?.find(r => r.type === 'TO')?.recipient || {}
     const senderEmail = senderObj.email || firstRecipient.email || ''
-    const senderName  = senderObj.name  || firstRecipient.name  || senderEmail || 'Unknown'
-    return {
-      senderId:    senderObj.id || firstRecipient.id || '',
-      senderEmail,
-      senderName,
-      subject:  latestMsg.subject || '',
-      body:     latestMsg.body    || '',
-      date:     latestMsg.sentAt ? new Date(latestMsg.sentAt).toLocaleString() : '',
-    }
+    const senderName = senderObj.name || firstRecipient.name || senderEmail || 'Unknown'
+    return { senderId: senderObj.id || firstRecipient.id || '', senderEmail, senderName, subject: latestMsg.subject || '', body: latestMsg.body || '', date: latestMsg.sentAt ? new Date(latestMsg.sentAt).toLocaleString() : '' }
   }
 
   const buildForwardContext = () => {
     const senderObj = latestMsg.sender || {}
-    const senderEmail = senderObj.email || ''
-    const senderName  = senderObj.name  || senderEmail || 'Unknown'
-    return {
-      senderId:    senderObj.id  || '',
-      senderEmail,
-      senderName,
-      subject:     latestMsg.subject || '',
-      body:        latestMsg.body    || '',
-      date:        latestMsg.sentAt ? new Date(latestMsg.sentAt).toLocaleString() : '',
-    }
+    return { senderId: senderObj.id || '', senderEmail: senderObj.email || '', senderName: senderObj.name || senderObj.email || 'Unknown', subject: latestMsg.subject || '', body: latestMsg.body || '', date: latestMsg.sentAt ? new Date(latestMsg.sentAt).toLocaleString() : '' }
   }
 
-  // Sanitize helper reused per message
-  // Use RETURN_DOM_FRAGMENT=false, ADD_TAGS for form elements, and explicitly
-  // allow interactive elements so filled-in form values survive sanitization.
   const sanitizeBody = (body) => DOMPurify.sanitize(body || '(No content)', {
-    ALLOWED_TAGS: ['p','br','strong','b','em','i','u','s','a','ul','ol','li',
-                   'h1','h2','h3','h4','blockquote','pre','code','table',
-                   'thead','tbody','tr','th','td','img','hr','div','span',
-                   'input','textarea','select','option','label'],
-    ALLOWED_ATTR: ['href','src','alt','style','class','target','rel',
-                   'colspan','rowspan','width','height','align','border',
-                   'cellpadding','cellspacing','type','value','placeholder',
-                   'rows','cols','name','checked','selected','disabled',
-                   'readonly','size','maxlength','for','id'],
+    ALLOWED_TAGS: ['p','br','strong','b','em','i','u','s','a','ul','ol','li','h1','h2','h3','h4','blockquote','pre','code','table','thead','tbody','tr','th','td','img','hr','div','span','input','textarea','select','option','label'],
+    ALLOWED_ATTR: ['href','src','alt','style','class','target','rel','colspan','rowspan','width','height','align','border','cellpadding','cellspacing','type','value','placeholder','rows','cols','name','checked','selected','disabled','readonly','size','maxlength','for','id'],
     ALLOW_DATA_ATTR: false,
     FORCE_BODY: true,
-    // Keep form elements — DOMPurify strips them by default as "dangerous"
     ADD_TAGS: ['input','textarea','select','option'],
     ADD_ATTR: ['value','type','checked','selected','readonly','disabled','placeholder','rows','name'],
   })
 
+  const avatarColorMap = ['bg-blue-500','bg-purple-500','bg-green-500','bg-orange-500','bg-pink-500','bg-teal-500']
+  const getAvatarColor = (name) => avatarColorMap[Math.abs((name || '').split('').reduce((h, c) => c.charCodeAt(0) + ((h << 5) - h), 0)) % avatarColorMap.length]
+
+  // ── Full email / thread view ──────────────────────────────────────────────
   return (
-    <div className="flex-1 flex flex-col bg-white">
-      {/* Thread header */}
-      <div className="p-5 border-b border-gray-100">
-        <div className="flex items-center justify-between mb-1">
-          <h2 className="text-lg font-medium text-gray-900 flex-1 min-w-0 truncate pr-4">
-            {latestMsg.subject}
-          </h2>
-          <div className="flex items-center gap-1 flex-shrink-0">
-            <button onClick={handleStarEmail} disabled={loading}
-              className="p-1.5 hover:bg-yellow-50 rounded-md transition-colors disabled:opacity-50"
-              title={latestMsg.isStarred ? 'Unstar' : 'Star'}>
-              <Star className={`w-4 h-4 ${latestMsg.isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
-            </button>
-            <button onClick={handleDeleteEmail} disabled={loading}
-              className="p-1.5 hover:bg-red-50 rounded-md transition-colors disabled:opacity-50"
-              title={isBinView ? 'Delete permanently' : 'Move to bin'}>
-              <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
-            </button>
-            <button className="p-1.5 hover:bg-gray-50 rounded-md transition-colors">
-              <HelpCircle className="w-4 h-4 text-gray-400" />
-            </button>
-          </div>
+    <div className="flex-1 flex flex-col overflow-hidden" style={{ background: '#ffffff' }}>
+
+      {/* Subject header */}
+      <div className="px-6 pt-5 pb-3 border-b border-gray-100 flex items-start justify-between gap-4">
+        <h2 className="text-xl font-semibold text-gray-900 flex-1 min-w-0 leading-snug">
+          {latestMsg.subject}
+        </h2>
+        <div className="flex items-center gap-1 flex-shrink-0 mt-0.5">
+          <button onClick={handleStarEmail} disabled={loading}
+            className="p-1.5 hover:bg-yellow-50 rounded-lg transition-colors disabled:opacity-50"
+            title={latestMsg.isStarred ? 'Unstar' : 'Star'}>
+            <Star className={`w-4 h-4 ${latestMsg.isStarred ? 'fill-yellow-400 text-yellow-400' : 'text-gray-400'}`} />
+          </button>
+          <button onClick={handleDeleteEmail} disabled={loading}
+            className="p-1.5 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+            title={isBinView ? 'Delete permanently' : 'Move to bin'}>
+            <Trash2 className="w-4 h-4 text-gray-400 hover:text-red-500" />
+          </button>
+          <button className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+            <MoreHorizontal className="w-4 h-4 text-gray-400" />
+          </button>
         </div>
-        {isThread && (
-          <p className="text-xs text-gray-400">{thread.length} messages in this conversation</p>
-        )}
       </div>
 
       {/* Thread messages */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto py-2">
         {actionError && (
-          <div className="mx-5 mt-4 p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-600 flex items-start gap-2">
-            <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" />
-            <span>{actionError}</span>
+          <div className="mx-5 mt-2 p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600 flex items-start gap-2">
+            <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>{actionError}</span>
           </div>
+        )}
+
+        {isThread && (
+          <p className="text-xs text-gray-400 px-5 pb-1 pt-1">{thread.length} messages in this conversation</p>
         )}
 
         {thread.map((msg, idx) => {
@@ -644,61 +465,74 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
           const isLast = idx === thread.length - 1
           const msgSenderName = msg.sender?.name || (typeof msg.sender === 'string' ? msg.sender : 'Unknown')
           const msgSenderEmail = msg.sender?.email || ''
-          const avatarColors = ['bg-blue-500','bg-purple-500','bg-green-500','bg-orange-500','bg-pink-500','bg-teal-500']
-          const avatarColor = avatarColors[Math.abs(
-            (msgSenderName || '').split('').reduce((h, c) => c.charCodeAt(0) + ((h << 5) - h), 0)
-          ) % avatarColors.length]
+          const avatarColor = getAvatarColor(msgSenderName)
           const initials = msgSenderName !== 'Unknown'
             ? msgSenderName.trim().split(' ').map(p => p[0]).slice(0, 2).join('').toUpperCase()
             : '?'
 
           return (
-            <div key={msg.id} className={`border-b border-gray-100 ${isLast ? '' : ''}`}>
-              {/* Message header — always visible, click to expand/collapse */}
+            <div
+              key={msg.id}
+              className={`mx-3 my-2 rounded-[18px] border transition-colors ${
+                isExpanded
+                  ? 'bg-white border-[#E5E7EB] shadow-sm'
+                  : 'bg-[#F5F7FA] border-[#E5E7EB] hover:bg-white hover:border-[#D1D5DB]'
+              }`}
+            >
+              {/* Message header row */}
               <div
-                className="flex items-center gap-2.5 px-5 py-3 cursor-pointer hover:bg-gray-50 transition-colors"
+                className="flex items-start gap-3 px-5 py-4 cursor-pointer"
                 onClick={() => toggleExpand(msg.id)}
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 ${avatarColor}`}>
-                  <span className="text-white text-xs font-semibold">{initials}</span>
+                {/* Sender avatar */}
+                <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 text-white text-sm font-bold ${avatarColor}`}>
+                  {initials}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-medium text-gray-900 text-sm">{msgSenderName}</span>
-                    {msg.sender?.verified && (
-                      <span className="text-xs bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded-full">✓ Verified</span>
-                    )}
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      {/* Name + verified */}
+                      <div className="flex items-center gap-1.5">
+                        <span className="font-semibold text-[#202124] text-sm">{msgSenderName}</span>
+                        {msg.sender?.verified && <VerifiedBadge className="w-3.5 h-3.5" />}
+                      </div>
+                      {/* Email address when expanded */}
+                      {isExpanded && (
+                        <p className="text-xs text-[#707782] mt-0.5">{msgSenderEmail}</p>
+                      )}
+                      {/* Preview when collapsed */}
+                      {!isExpanded && (
+                        <p className="text-xs text-[#707782] truncate mt-0.5 max-w-sm">
+                          {msg.body ? msg.body.replace(/<[^>]+>/g, '').slice(0, 80) : ''}
+                        </p>
+                      )}
+                    </div>
+                    {/* Date + chevron */}
+                    <div className="flex items-center gap-2 flex-shrink-0 mt-0.5">
+                      <span className="text-xs text-[#707782] whitespace-nowrap">
+                        {msg.sentAt ? new Date(msg.sentAt).toLocaleString() : msg.timestamp}
+                      </span>
+                      {isExpanded
+                        ? <ChevronUp className="w-3.5 h-3.5 text-[#707782]" />
+                        : <ChevronDown className="w-3.5 h-3.5 text-[#707782]" />}
+                    </div>
                   </div>
-                  {!isExpanded && (
-                    <p className="text-xs text-gray-400 truncate">
-                      {msg.body ? msg.body.replace(/<[^>]+>/g, '').slice(0, 60) : ''}
-                    </p>
-                  )}
-                  {isExpanded && (
-                    <p className="text-xs text-gray-500">{msgSenderEmail}</p>
-                  )}
-                </div>
-                <div className="flex items-center gap-1.5 flex-shrink-0">
-                  <span className="text-xs text-gray-400">
-                    {msg.sentAt ? new Date(msg.sentAt).toLocaleString() : msg.timestamp}
-                  </span>
-                  {isExpanded
-                    ? <ChevronUp className="w-3.5 h-3.5 text-gray-400" />
-                    : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />}
                 </div>
               </div>
 
-              {/* Message body — shown when expanded */}
+              {/* Expanded body */}
               {isExpanded && (
                 <div className="px-5 pb-5">
+
                   <div
                     className="text-sm text-gray-700 leading-relaxed prose prose-sm max-w-none"
                     dangerouslySetInnerHTML={{ __html: sanitizeBody(msg.body || msg.preview) }}
                   />
+
                   {/* Attachments */}
                   {msg.attachments?.length > 0 && (
                     <div className="mt-4 pt-4 border-t border-gray-100">
-                      <p className="text-xs font-medium text-gray-500 mb-2 uppercase tracking-wide">
+                      <p className="text-xs font-semibold text-gray-500 mb-2 uppercase tracking-wide">
                         {msg.attachments.length} Attachment{msg.attachments.length > 1 ? 's' : ''}
                       </p>
                       <div className="flex flex-wrap gap-2">
@@ -706,7 +540,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
                           <a key={att.id}
                             href={emailAPI.getAttachmentUrl(msg.id, att.id)}
                             target="_blank" rel="noreferrer"
-                            className="flex items-center gap-2 bg-gray-50 border border-gray-200 hover:border-blue-300 px-3 py-2 rounded-lg text-sm transition-colors">
+                            className="flex items-center gap-2 bg-gray-50 border border-gray-200 hover:border-blue-300 px-3 py-2 rounded-2xl text-sm transition-colors">
                             <Paperclip className="w-4 h-4 text-gray-500 flex-shrink-0" />
                             <div className="min-w-0">
                               <p className="text-gray-700 truncate max-w-[160px]">{att.filename}</p>
@@ -725,102 +559,79 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
         })}
       </div>
 
-      {/* Reply / Forward actions */}
-      <div className="px-5 py-3 border-t border-gray-100 flex items-center gap-2">
-        {onReply && (
-          <button onClick={() => onReply(buildReplyContext())}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-            <Reply className="w-4 h-4" /> Reply
+      {/* ── Bottom: inline reply/compose bar ── */}
+      {replyMode ? (
+        <ComposeModal
+          inline
+          replyTo={replyMode === 'reply' ? buildReplyContext() : undefined}
+          forwardOf={replyMode === 'forward' ? buildForwardContext() : undefined}
+          onClose={() => {
+            setReplyMode(null)
+            if (onRefresh) onRefresh()
+          }}
+        />
+      ) : (
+        <div className="border-t border-gray-100 px-4 py-3 flex items-center gap-2" style={{ background: '#ffffff' }}>
+          <button
+            onClick={() => setReplyMode('reply')}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+          >
+            <Reply className="w-4 h-4 text-gray-500" />
+            Reply
           </button>
-        )}
-        {onForward && (
-          <button onClick={() => onForward(buildForwardContext())}
-            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 transition-colors">
-            <Forward className="w-4 h-4" /> Forward
+          <button
+            onClick={() => setReplyMode('forward')}
+            className="flex items-center gap-2 px-4 py-2 border border-gray-200 rounded-full text-sm text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all shadow-sm"
+          >
+            <Forward className="w-4 h-4 text-gray-500" />
+            Forward
           </button>
-        )}
-      </div>
+        </div>
+      )}
 
-      {/* Knocc Modal for People Directory */}
+      {/* Knocc Modal (from people directory opened within email detail) */}
       {showKnoccModal && selectedPerson && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-md">
             <div className="p-5 border-b border-gray-100 flex items-center justify-between">
-              <h2 className="text-lg font-medium text-gray-900">Send Knocc Request</h2>
-              <button 
-                onClick={() => {
-                  setShowKnoccModal(false)
-                  setSelectedPerson(null)
-                  setKnoccReason('')
-                }}
-                className="p-1 hover:bg-gray-100 rounded-md transition-colors"
-              >
+              <h2 className="text-lg font-semibold text-gray-900">Send Knocc Request</h2>
+              <button onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason('') }} className="p-1 hover:bg-gray-100 rounded-lg">
                 <X className="w-5 h-5 text-gray-500" />
               </button>
             </div>
-            
             <div className="p-5">
-              <div className="mb-4">
-                <div className="flex items-center gap-3 mb-4">
-                  {(() => {
-                    const initials = (selectedPerson.name || '?').split(' ').map((n) => n[0]).join('').slice(0, 2).toUpperCase()
-                    return (
-                      <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-lg font-medium">
-                        {initials}
-                      </div>
-                    )
-                  })()}
-                  <div>
-                    <div className="flex items-center gap-1.5">
-                      <h3 className="text-base font-medium text-gray-900">{selectedPerson.name}</h3>
-                      {selectedPerson.verified && <VerifiedBadge className="w-4 h-4" />}
-                    </div>
-                    <p className="text-sm text-gray-500">{selectedPerson.country || selectedPerson.email}</p>
-                  </div>
+              <div className="flex items-center gap-3 mb-4">
+                <div className="w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full flex items-center justify-center text-white text-lg font-semibold">
+                  {(selectedPerson.name || '?').split(' ').map(n => n[0]).join('').slice(0,2).toUpperCase()}
                 </div>
-                
-                <div className="bg-gray-50 p-3 rounded-md mb-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm text-gray-600">Knocc Price:</span>
-                    <div className="flex items-center gap-1">
-                      <div className={`w-4 h-4 ${selectedPerson.knoccPrice >= 50 ? 'bg-purple-500' : 'bg-green-500'} rounded-full flex items-center justify-center`}>
-                        <DollarSign className="w-2.5 h-2.5 text-white" strokeWidth={3} />
-                      </div>
-                      <span className="text-base font-semibold text-gray-900">${selectedPerson.knoccPrice}</span>
+                <div>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="text-base font-semibold text-gray-900">{selectedPerson.name}</h3>
+                    {selectedPerson.verified && <VerifiedBadge className="w-4 h-4" />}
+                  </div>
+                  <p className="text-sm text-gray-500">{selectedPerson.country || selectedPerson.email}</p>
+                </div>
+              </div>
+              <div className="bg-gray-50 p-3 rounded-2xl mb-4">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm text-gray-600">Knocc Price:</span>
+                  <div className="flex items-center gap-1">
+                    <div className={`w-4 h-4 ${selectedPerson.knoccPrice >= 50 ? 'bg-purple-500' : 'bg-green-500'} rounded-full flex items-center justify-center`}>
+                      <DollarSign className="w-2.5 h-2.5 text-white" strokeWidth={3} />
                     </div>
+                    <span className="text-base font-bold text-gray-900">${selectedPerson.knoccPrice}</span>
                   </div>
                 </div>
               </div>
-
-              <div className="mb-4">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Reason for Knocc Request*
-                </label>
-                <textarea
-                  value={knoccReason}
-                  onChange={(e) => setKnoccReason(e.target.value)}
-                  placeholder="Explain why you want to connect..."
-                  rows={4}
-                  className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none"
-                />
-              </div>
-
+              <label className="block text-sm font-medium text-gray-700 mb-2">Reason for Knocc Request*</label>
+              <textarea value={knoccReason} onChange={e => setKnoccReason(e.target.value)}
+                placeholder="Explain why you want to connect..." rows={4}
+                className="w-full px-3 py-2 border border-gray-200 rounded-2xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none mb-4" />
               <div className="flex gap-2">
-                <button
-                  onClick={() => {
-                    setShowKnoccModal(false)
-                    setSelectedPerson(null)
-                    setKnoccReason('')
-                  }}
-                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 transition-colors text-sm font-medium"
-                >
-                  Cancel
-                </button>
-                <button
-                  onClick={handleSendKnocc}
-                  disabled={loading || !knoccReason.trim()}
-                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed transition-colors text-sm font-medium"
-                >
+                <button onClick={() => { setShowKnoccModal(false); setSelectedPerson(null); setKnoccReason('') }}
+                  className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-2xl hover:bg-gray-50 text-sm font-medium">Cancel</button>
+                <button onClick={handleSendKnocc} disabled={loading || !knoccReason.trim()}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-2xl hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium">
                   {loading ? 'Sending...' : `Send Request ($${selectedPerson.knoccPrice})`}
                 </button>
               </div>

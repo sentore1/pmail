@@ -15,7 +15,7 @@ const EMOJIS = [
   '👋','🤝','💼','📊','✏️','🚀','💬','🔔','⚠️','ℹ️',
 ]
 
-function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }) {
+function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft, inline }) {
   // ── Fields ────────────────────────────────────────────────────────────────
   const [recipients, setRecipients] = useState([]) // [{email, name, approved, knoccPrice}]
   const [recipientInput, setRecipientInput] = useState('')
@@ -659,6 +659,375 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft }
     const html = template.category === 'form' ? buildFormHTML(template) : template.template
     if (messageRef.current) { messageRef.current.innerHTML = html; setMessage(html) }
     setShowTemplateModal(false)
+  }
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (inline) {
+    return (
+      <>
+        <div className="flex flex-col bg-white border-t border-gray-200" style={{ maxHeight: '70vh' }}>
+
+          {/* ── Header ── */}
+          <div className="flex items-center justify-between px-4 py-2.5 border-b border-gray-200">
+            <h2 className="text-base font-semibold text-gray-800 truncate flex items-center gap-2">
+              {replyTo ? <><Reply className="w-4 h-4 text-blue-500" /> Reply</> :
+               forwardOf ? <><Forward className="w-4 h-4 text-blue-500" /> Forward</> :
+               (recipients.length > 0 ? `To: ${recipients.map(r => r.name || r.email).join(', ')}` : 'New Message')}
+            </h2>
+            <button onClick={onClose} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+              <X className="w-5 h-5 text-gray-600" />
+            </button>
+          </div>
+
+          {/* ── Body ── */}
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
+              {error && <div className="mx-4 mt-3 mb-1 text-sm text-red-600">{error}</div>}
+              <div className="divide-y divide-gray-200">
+
+                {/* To */}
+                <div className="relative px-4 py-2">
+                  <div className="flex items-start gap-3">
+                    <label className="text-sm text-gray-600 flex-shrink-0 w-10 mt-1.5">To</label>
+                    <div className="flex-1 relative">
+                      <div className="flex flex-wrap gap-1.5 items-center min-h-[28px]">
+                        {recipients.map((r) => (
+                          <div key={r.email} className="flex items-center gap-1 px-2 py-1 rounded-full text-xs text-white" style={{backgroundColor:'#2563eb'}}>
+                            <span>{r.name || r.email}</span>
+                            {!r.approved && r.email.includes('@') && <DollarSign className="w-3 h-3" />}
+                            <button onClick={() => handleRemoveRecipient(r.email)} className="hover:text-blue-900"><X className="w-3 h-3" /></button>
+                          </div>
+                        ))}
+                        <input ref={recipientInputRef} type="text" value={recipientInput}
+                          onChange={handleRecipientInputChange} onKeyDown={handleRecipientKeyDown}
+                          onFocus={() => recipientInput && setShowSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowSuggestions(false), 150)}
+                          placeholder={recipients.length === 0 ? "Type name or email" : "Add more..."}
+                          className="flex-1 min-w-[120px] py-0.5 px-0 focus:outline-none text-sm border-none"
+                          autoComplete="off" />
+                      </div>
+                      {showSuggestions && filteredContacts.length > 0 && (
+                        <div className="absolute z-20 left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                          {filteredContacts.map((contact) => (
+                            <button key={contact.id} onMouseDown={() => handleSelectContact(contact)}
+                              className="w-full px-4 py-2 hover:bg-gray-50 flex items-center justify-between text-left border-b border-gray-100 last:border-b-0">
+                              <div>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium text-gray-900">{contact.name}</span>
+                                  {contact.approved && <span className="text-xs bg-green-50 text-green-600 px-2 py-0.5 rounded-full">Approved</span>}
+                                </div>
+                                <span className="text-xs text-gray-500">{contact.email}</span>
+                              </div>
+                              {!contact.approved && (
+                                <div className="flex items-center gap-1 text-xs font-medium text-gray-700">
+                                  <DollarSign className="w-3 h-3" />${contact.knoccPrice}
+                                </div>
+                              )}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <div className="flex gap-2 flex-shrink-0 mt-1.5">
+                      {!showCc && <button onClick={() => setShowCc(true)} className="text-xs text-gray-500 hover:text-blue-600">Cc</button>}
+                      {!showBcc && <button onClick={() => setShowBcc(true)} className="text-xs text-gray-500 hover:text-blue-600">Bcc</button>}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Cc */}
+                {showCc && (
+                  <div className="relative px-4 py-2">
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm text-gray-600 flex-shrink-0 w-10">Cc</label>
+                      <div className="flex-1 relative">
+                        <input type="text" value={cc} onChange={handleCcChange}
+                          onFocus={() => cc && setShowCcSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowCcSuggestions(false), 150)}
+                          className="w-full py-0.5 px-0 focus:outline-none text-sm" autoComplete="off" />
+                        {showCcSuggestions && filteredCcContacts.length > 0 && (
+                          <div className="absolute z-20 left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {filteredCcContacts.map((c) => (
+                              <button key={c.id} onMouseDown={() => handleSelectCcContact(c)}
+                                className="w-full px-4 py-2 hover:bg-gray-50 flex items-center text-left border-b border-gray-100 last:border-b-0 gap-2">
+                                <span className="text-sm font-medium text-gray-900">{c.name}</span>
+                                <span className="text-xs text-gray-500">{c.email}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Bcc */}
+                {showBcc && (
+                  <div className="relative px-4 py-2">
+                    <div className="flex items-center gap-3">
+                      <label className="text-sm text-gray-600 flex-shrink-0 w-10">Bcc</label>
+                      <div className="flex-1 relative">
+                        <input type="text" value={bcc} onChange={handleBccChange}
+                          onFocus={() => bcc && setShowBccSuggestions(true)}
+                          onBlur={() => setTimeout(() => setShowBccSuggestions(false), 150)}
+                          className="w-full py-0.5 px-0 focus:outline-none text-sm" autoComplete="off" />
+                        {showBccSuggestions && filteredBccContacts.length > 0 && (
+                          <div className="absolute z-20 left-0 top-full mt-1 w-full bg-white border border-gray-200 rounded-lg shadow-lg max-h-48 overflow-y-auto">
+                            {filteredBccContacts.map((c) => (
+                              <button key={c.id} onMouseDown={() => handleSelectBccContact(c)}
+                                className="w-full px-4 py-2 hover:bg-gray-50 flex items-center text-left border-b border-gray-100 last:border-b-0 gap-2">
+                                <span className="text-sm font-medium text-gray-900">{c.name}</span>
+                                <span className="text-xs text-gray-500">{c.email}</span>
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Subject */}
+                <div className="px-4 py-2">
+                  <div className="flex items-center gap-3">
+                    <label className="text-sm text-gray-600 flex-shrink-0 w-10">Subject</label>
+                    <input type="text" value={subject} onChange={(e) => setSubject(e.target.value)}
+                      placeholder="Subject" className="flex-1 py-0.5 px-0 focus:outline-none text-sm" />
+                  </div>
+                </div>
+
+                {/* Message */}
+                <div className="px-4 py-3">
+                  <div ref={messageRef} contentEditable onInput={handleMessageChange}
+                    className="w-full min-h-[140px] focus:outline-none text-sm"
+                    style={{ fontFamily: selectedFont === 'Sans Serif' ? 'sans-serif' : selectedFont === 'Serif' ? 'serif' : selectedFont === 'Monospace' ? 'monospace' : selectedFont }}
+                    suppressContentEditableWarning />
+                </div>
+              </div>
+            </div>
+
+            {/* AI + Template buttons */}
+            <div className="bg-white px-4 py-1.5 flex items-center justify-end gap-1.5 border-t border-gray-100">
+              <button onClick={() => setShowAIModal(true)}
+                className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium">
+                <Sparkles className="w-3 h-3" /> AI Write
+              </button>
+              <button onClick={() => setShowTemplateModal(true)}
+                className="flex items-center gap-1 px-2 py-0.5 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium">
+                <FileText className="w-3 h-3" /> Templates
+              </button>
+            </div>
+
+            {/* Toolbar */}
+            <div className="bg-gray-50 border-t border-gray-200 px-4 py-2">
+              <div className="flex items-center gap-1 flex-wrap" onMouseLeave={() => setShowMoreTools(false)}>
+                <div className="relative">
+                  <button onClick={() => setShowFontMenu(!showFontMenu)}
+                    className="flex items-center gap-1 px-3 py-1.5 hover:bg-gray-200 rounded text-sm text-gray-700">
+                    {selectedFont}
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </button>
+                  {showFontMenu && (
+                    <div className="absolute bottom-full left-0 mb-1 bg-white border border-gray-200 rounded-lg shadow-lg py-1 z-10 min-w-[150px]">
+                      {['Sans Serif','Serif','Monospace','Arial','Times New Roman','Courier New'].map((font) => (
+                        <button key={font} onClick={() => { setSelectedFont(font); applyFormat('fontName', font === 'Sans Serif' ? 'sans-serif' : font === 'Serif' ? 'serif' : font === 'Monospace' ? 'monospace' : font); setShowFontMenu(false) }}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 text-gray-700">{font}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <button onClick={() => applyFormat('bold')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><Bold className="w-4 h-4" /></button>
+                <button onClick={() => applyFormat('italic')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><Italic className="w-4 h-4" /></button>
+                <button onClick={() => applyFormat('underline')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><Underline className="w-4 h-4" /></button>
+                <button onMouseEnter={() => setShowMoreTools(true)} className="p-2 hover:bg-gray-200 rounded text-gray-600" title="More tools">
+                  <svg className={`w-4 h-4 transition-transform ${showMoreTools ? 'rotate-90' : ''}`} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                  </svg>
+                </button>
+                {showMoreTools && (
+                  <>
+                    <div className="w-px h-6 bg-gray-300 mx-1" />
+                    <button onClick={() => applyFormat('undo')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><RotateCcw className="w-4 h-4" /></button>
+                    <button onClick={() => applyFormat('redo')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><RotateCw className="w-4 h-4" /></button>
+                    <div className="w-px h-6 bg-gray-300 mx-1" />
+                    <button onClick={() => applyFormat('justifyLeft')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><AlignLeft className="w-4 h-4" /></button>
+                    <button onClick={() => applyFormat('justifyCenter')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><AlignCenter className="w-4 h-4" /></button>
+                    <button onClick={() => applyFormat('justifyRight')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><AlignRight className="w-4 h-4" /></button>
+                    <div className="w-px h-6 bg-gray-300 mx-1" />
+                    <button onClick={() => applyFormat('insertUnorderedList')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><List className="w-4 h-4" /></button>
+                    <button onClick={() => applyFormat('insertOrderedList')} className="p-2 hover:bg-gray-200 rounded text-gray-600"><ListOrdered className="w-4 h-4" /></button>
+                    <div className="w-px h-6 bg-gray-300 mx-1" />
+                    <button onClick={handleInsertTable} className="p-2 hover:bg-gray-200 rounded text-gray-600" title="Insert table"><Table className="w-4 h-4" /></button>
+                    <button onClick={handleInsertCodeBlock} className="p-2 hover:bg-gray-200 rounded text-gray-600" title="Insert code"><Code className="w-4 h-4" /></button>
+                    <button onClick={handleInsertHR} className="p-2 hover:bg-gray-200 rounded text-gray-600" title="Horizontal line">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 12h14" /></svg>
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-4 border-t border-gray-200 bg-white">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <button onClick={validateAndSend} disabled={loading}
+                    className="flex items-center gap-2 px-6 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full font-medium disabled:opacity-50 disabled:cursor-not-allowed text-sm">
+                    <Send className="w-4 h-4" />
+                    {loading ? 'Sending…' : 'Send'}
+                  </button>
+                  <button onClick={onClose} className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-full text-sm">Discard</button>
+                </div>
+                <div className="flex items-center gap-1 relative">
+                  <input type="file" ref={fileInputRef} onChange={handleFileAttachment} multiple className="hidden" />
+                  <button onClick={() => fileInputRef.current?.click()} title="Attach file" className="p-2 hover:bg-gray-100 rounded text-gray-600"><Paperclip className="w-5 h-5" /></button>
+                  <button onClick={handleInsertLink} title="Insert link" className="p-2 hover:bg-gray-100 rounded text-gray-600"><LinkIcon className="w-5 h-5" /></button>
+                  <div className="relative">
+                    <button onClick={() => setShowEmojiPicker(!showEmojiPicker)} title="Insert emoji" className="p-2 hover:bg-gray-100 rounded text-gray-600"><Smile className="w-5 h-5" /></button>
+                    {showEmojiPicker && (
+                      <div className="absolute bottom-full right-0 mb-2 bg-white border border-gray-200 rounded-xl shadow-lg p-3 w-56 z-20">
+                        <div className="grid grid-cols-8 gap-1">
+                          {EMOJIS.map((emoji) => (
+                            <button key={emoji} onClick={() => handleInsertEmoji(emoji)} className="text-xl hover:bg-gray-100 rounded p-0.5 leading-none">{emoji}</button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                  <button onClick={handleInsertImage} title="Insert image URL" className="p-2 hover:bg-gray-100 rounded text-gray-600"><Image className="w-5 h-5" /></button>
+                </div>
+              </div>
+              {attachments.length > 0 && (
+                <div className="mt-3 pt-3 border-t border-gray-100 flex flex-wrap gap-2">
+                  {attachments.map((file, idx) => (
+                    <div key={idx} className="flex items-center gap-2 bg-gray-100 px-3 py-1.5 rounded-full text-sm max-w-xs">
+                      <Paperclip className="w-3 h-3 text-gray-600 flex-shrink-0" />
+                      <span className="text-gray-700 truncate">{file.filename}</span>
+                      <span className="text-gray-400 text-xs flex-shrink-0">{formatBytes(file.size)}</span>
+                      <button onClick={() => removeAttachment(idx)} className="text-gray-500 hover:text-red-500 flex-shrink-0"><X className="w-3 h-3" /></button>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Knocc payment overlay */}
+        {showKnoccPayment && selectedContact && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 z-[60] flex items-center justify-center p-4">
+            <div className="bg-white rounded-lg shadow-xl w-full max-w-md">
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                <h2 className="text-lg font-medium text-gray-900">Knocc Request Required</h2>
+                <button onClick={() => { setShowKnoccPayment(false); setSelectedContact(null) }} className="p-1 hover:bg-gray-100 rounded-md"><X className="w-5 h-5 text-gray-500" /></button>
+              </div>
+              <div className="p-5">
+                <div className="bg-gray-50 p-3 rounded-md mb-4">
+                  <div className="flex justify-between items-center text-sm">
+                    <span className="text-gray-600">Sending to:</span>
+                    <span className="font-medium text-gray-900">{selectedContact.name || selectedContact.email}</span>
+                  </div>
+                  <div className="flex justify-between items-center text-sm mt-1">
+                    <span className="text-gray-600">Knocc fee:</span>
+                    <span className="font-semibold text-gray-900">${selectedContact.knoccPrice || 1}</span>
+                  </div>
+                </div>
+                {error && <p className="text-sm text-red-600 mb-3">{error}</p>}
+                <label className="block text-sm font-medium text-gray-700 mb-2">Reason for contact *</label>
+                <textarea value={knoccReason} onChange={(e) => setKnoccReason(e.target.value)}
+                  placeholder="Explain why you want to connect..." rows={4}
+                  className="w-full px-3 py-2 border border-gray-200 rounded-md focus:outline-none text-sm resize-none mb-4" />
+                <div className="flex gap-2">
+                  <button onClick={() => { setShowKnoccPayment(false); setSelectedContact(null) }}
+                    className="flex-1 px-4 py-2 border border-gray-200 text-gray-700 rounded-md hover:bg-gray-50 text-sm font-medium">Cancel</button>
+                  <button onClick={handleKnoccPayment} disabled={loading || !knoccReason.trim()}
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-sm font-medium">
+                    {loading ? 'Sending…' : `Send Knocc ($${selectedContact.knoccPrice || 1})`}
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* AI Modal */}
+        {showAIModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-30 z-[60]" onClick={() => setShowAIModal(false)}>
+            <div className="absolute bottom-2 right-6 bg-white rounded-lg w-[480px] shadow-2xl" onClick={(e) => e.stopPropagation()}>
+              <div className="p-5 border-b border-gray-100 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className="w-7 h-7 bg-blue-600 rounded-full flex items-center justify-center"><Sparkles className="w-4 h-4 text-white" /></div>
+                  <h3 className="text-base font-semibold text-gray-900">AI Email Assistant</h3>
+                </div>
+                <button onClick={() => setShowAIModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-4 h-4 text-gray-500" /></button>
+              </div>
+              <div className="p-6 space-y-4">
+                <div className="flex gap-3">
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Category</label>
+                    <select value={aiCategory} onChange={(e) => setAiCategory(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="general">General</option><option value="professional">Professional</option><option value="marketing">Marketing</option><option value="sales">Sales</option>
+                    </select>
+                  </div>
+                  <div className="flex-1">
+                    <label className="block text-xs font-medium text-gray-600 mb-1.5">Tone</label>
+                    <select value={aiTone} onChange={(e) => setAiTone(e.target.value)} className="w-full px-3 py-2 border border-gray-200 rounded-xl text-xs text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white">
+                      <option value="professional">Professional</option><option value="casual">Casual</option><option value="direct">Direct</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1.5">What do you want to write about?</label>
+                  <textarea value={aiPrompt} onChange={(e) => setAiPrompt(e.target.value)} placeholder="e.g., a new product launch, meeting request, project update…" rows={6} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm resize-none" />
+                </div>
+                <div className="flex gap-2 pt-1">
+                  <button onClick={() => setShowAIModal(false)} className="px-5 py-2 border border-gray-200 text-gray-600 rounded-full hover:bg-gray-50 text-xs font-medium">Cancel</button>
+                  <button onClick={handleAIGenerate} className="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-full text-xs font-medium flex items-center justify-center gap-1.5">
+                    <Sparkles className="w-3 h-3" /> Generate Email
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Templates Modal */}
+        {showTemplateModal && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-end justify-start z-[60] p-4">
+            <div className="bg-white rounded-lg w-full max-w-2xl shadow-xl max-h-[70vh] flex flex-col mb-2 ml-2">
+              <div className="px-5 py-4 border-b border-gray-100 flex items-center justify-between">
+                <h3 className="text-base font-semibold text-gray-900">Templates</h3>
+                <button onClick={() => setShowTemplateModal(false)} className="p-1 hover:bg-gray-100 rounded-full"><X className="w-5 h-5 text-gray-500" /></button>
+              </div>
+              <div className="flex gap-2 px-5 pt-4 pb-2">
+                {['content','form'].map((tab) => (
+                  <button key={tab} onClick={() => setTemplateTab(tab)}
+                    className={`px-4 py-1.5 rounded-xl text-sm font-medium transition-colors ${templateTab === tab ? 'bg-blue-600 text-white' : 'text-gray-600 hover:bg-gray-100'}`}>
+                    {tab === 'content' ? 'Email Templates' : 'Form Templates'}
+                  </button>
+                ))}
+              </div>
+              <div className="flex-1 overflow-y-auto p-5">
+                <div className="grid grid-cols-2 gap-3">
+                  {emailTemplates.filter((t) => (templateTab === 'content' ? t.category === 'email' : t.category === 'form')).map((template) => {
+                    const Icon = template.icon
+                    return (
+                      <button key={template.id} onClick={() => handleInsertTemplate(template)}
+                        className="flex items-center gap-3 p-4 rounded-xl shadow-md hover:shadow-lg transition-all text-left">
+                        <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center flex-shrink-0"><Icon className="w-5 h-5 text-white" /></div>
+                        <span className="text-sm font-medium text-gray-900">{template.name}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </>
+    )
   }
 
   // ── Render ────────────────────────────────────────────────────────────────

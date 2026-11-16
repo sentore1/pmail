@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Mail, Edit, Inbox, Send, Star, Trash2, MoreHorizontal, Bell, Settings, Users, Shield, Wallet, FileText, LogOut } from 'lucide-react'
+import { Edit3, Inbox, Send, Star, Trash2, MoreHorizontal, Bell, Settings, Users, Shield, Wallet, FileText, LogOut, ChevronDown } from 'lucide-react'
 
 function Sidebar({
   onCompose,
@@ -24,15 +24,17 @@ function Sidebar({
     return (
       <button
         onClick={onClick || (() => onNavigate(view))}
-        className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-colors text-sm ${
-          active ? 'bg-gray-100 text-gray-900 font-semibold' : 'text-gray-700 hover:bg-gray-50'
+      className={`w-full flex items-center gap-3 px-3 py-2 rounded-xl transition-all text-sm ${
+          active
+            ? 'bg-[#E2E5EA] text-[#202124] font-semibold'
+            : 'text-[#202124] hover:bg-[#E2E5EA]'
         }`}
       >
-        <Icon className="w-4 h-4 flex-shrink-0" />
-        <span>{label}</span>
+        <Icon className={`w-4 h-4 flex-shrink-0 ${active ? 'text-[#202124]' : 'text-[#707782]'}`} />
+        <span className="flex-1 text-left">{label}</span>
         {badge > 0 && (
-          <span className={`ml-auto text-xs px-1.5 py-0.5 rounded-full font-medium ${
-            active ? 'bg-gray-700 text-white' : 'bg-gray-200 text-gray-600'
+          <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${
+            active ? 'bg-[#2563EB] text-white' : 'bg-[#E2E5EA] text-[#707782]'
           }`}>
             {badge}
           </span>
@@ -42,50 +44,50 @@ function Sidebar({
   }
 
   return (
-    <div className="w-56 bg-white flex flex-col border-r border-gray-100">
+    <div className="w-56 flex flex-col flex-shrink-0 h-full" style={{ background: '#F1F3F6' }}>
       {/* Logo */}
-      <div className="p-5 flex items-center gap-2">
-        <Mail className="w-5 h-5 text-blue-600" />
-        <span className="text-lg font-medium text-gray-900">Pmail</span>
+      <div className="px-4 pt-4 pb-3 flex items-center gap-2">
+        <img
+          src="/pryro logo.png"
+          alt="Pmail"
+          className="h-6 w-auto object-contain"
+        />
+        <span className="text-base font-semibold text-gray-800 tracking-tight">Pmail</span>
       </div>
 
-      {/* Write Button */}
-      <div className="px-3 mb-4">
+      {/* Compose / Write Button */}
+      <div className="px-3 mb-3">
         <button
           onClick={onCompose}
-          className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white py-2.5 px-4 rounded-xl transition-colors text-sm font-medium"
+          className="w-full flex items-center gap-2.5 bg-white hover:bg-[#F5F7FA] text-[#202124] py-2 px-4 rounded-full transition-all text-sm font-medium shadow-sm border border-[#E5E7EB] group"
         >
-          <Edit className="w-4 h-4" />
-          Write
+          <Edit3 className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
+          <span>Write</span>
         </button>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 px-3 overflow-y-auto space-y-1">
+      <nav className="flex-1 px-2 overflow-y-auto space-y-0.5 py-1">
         {navBtn('inbox', Inbox, 'Inbox', unreadCount, onShowInbox)}
         {navBtn('knocc-requests', Bell, 'Knocc Requests', knoccRequestCount, onShowKnoccRequests)}
 
+        {/* More toggle */}
         <button
           onClick={() => setShowMore(!showMore)}
-          className="w-full flex items-center gap-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors text-sm"
+          className="w-full flex items-center gap-3 px-3 py-2 text-[#202124] hover:bg-[#E2E5EA] rounded-xl transition-all text-sm"
         >
-          <MoreHorizontal className="w-4 h-4" />
-          <span>More</span>
-          <svg
-            className={`w-3.5 h-3.5 ml-auto transition-transform text-gray-400 ${showMore ? 'rotate-180' : ''}`}
-            fill="none" stroke="currentColor" viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-          </svg>
+          <MoreHorizontal className="w-4 h-4 text-[#707782]" />
+          <span className="flex-1 text-left">More</span>
+          <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showMore ? 'rotate-180' : ''}`} />
         </button>
 
         {showMore && (
-          <div className="space-y-1 pl-2">
+          <div className="space-y-0.5 ml-1 pl-2 border-l-2 border-[#E5E7EB]">
             <button
               onClick={onShowWallet}
-              className="w-full flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors text-sm"
+              className="w-full flex items-center gap-3 px-3 py-2 text-[#202124] hover:bg-[#E2E5EA] rounded-xl transition-all text-sm"
             >
-              <Wallet className="w-4 h-4" />
+              <Wallet className="w-4 h-4 text-[#707782]" />
               <span>Wallet</span>
             </button>
             {navBtn('sent', Send, 'Sent')}
@@ -96,27 +98,28 @@ function Sidebar({
             {navBtn('blocked', Shield, 'Blocked Users')}
             <button
               onClick={onShowSettings}
-              className="w-full flex items-center gap-3 px-3 py-2 text-gray-600 hover:bg-gray-50 rounded-xl transition-colors text-sm"
+              className="w-full flex items-center gap-3 px-3 py-2 text-[#202124] hover:bg-[#E2E5EA] rounded-xl transition-all text-sm"
             >
-              <Settings className="w-4 h-4" />
+              <Settings className="w-4 h-4 text-[#707782]" />
               <span>Knocc Settings</span>
             </button>
           </div>
         )}
       </nav>
 
-      {/* Profile — bottom of sidebar */}
-      <div className="px-3 pb-3 pt-2 border-t border-gray-100 relative">
-        {/* Popup menu — opens upward */}
+      {/* Footer icon bar */}
+      <div className="px-2 pb-2 pt-1.5 border-t border-gray-300/40 relative">
+
+        {/* Profile popup — opens upward */}
         {showProfileMenu && (
-          <div className="absolute bottom-full left-3 right-3 mb-1.5 bg-white rounded-xl shadow-lg border border-gray-200 py-1 z-50">
+          <div className="absolute bottom-full left-2 right-2 mb-1.5 bg-white rounded-2xl shadow-lg border border-gray-200 py-1 z-50">
             <div className="px-3 py-2 border-b border-gray-100">
-              <p className="text-xs font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
+              <p className="text-xs font-semibold text-gray-900 truncate">{user?.name || 'User'}</p>
               <p className="text-xs text-gray-500 truncate">{user?.email || ''}</p>
             </div>
             <button
               onClick={() => { setShowProfileMenu(false); onShowSettings() }}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 transition-colors rounded-lg"
             >
               <Settings className="w-3.5 h-3.5" />
               Settings
@@ -124,7 +127,7 @@ function Sidebar({
             <div className="border-t border-gray-100 my-0.5" />
             <button
               onClick={() => { setShowProfileMenu(false); onLogout() }}
-              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors"
+              className="w-full flex items-center gap-2.5 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 transition-colors rounded-lg"
             >
               <LogOut className="w-3.5 h-3.5" />
               Logout
@@ -132,18 +135,41 @@ function Sidebar({
           </div>
         )}
 
-        <button
-          onClick={() => setShowProfileMenu((v) => !v)}
-          className="w-full flex items-center gap-2.5 px-2 py-1.5 rounded-xl hover:bg-gray-50 transition-colors"
-        >
-          <div className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-semibold flex-shrink-0">
+        {/* Horizontal icon row */}
+        <div className="flex items-center gap-1 px-1">
+          {/* Avatar / profile toggle */}
+          <button
+            onClick={() => setShowProfileMenu((v) => !v)}
+            title={user?.name || 'Profile'}
+            className="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-white text-[10px] font-bold flex-shrink-0 hover:bg-blue-700 transition-colors"
+          >
             {user?.name?.charAt(0).toUpperCase() || 'U'}
-          </div>
-          <div className="flex-1 min-w-0 text-left">
-            <p className="text-xs font-medium text-gray-900 truncate">{user?.name || 'User'}</p>
-            <p className="text-[10px] text-gray-500 truncate">{user?.email || ''}</p>
-          </div>
-        </button>
+          </button>
+
+          <button
+            onClick={onShowWallet}
+            title="Wallet"
+            className="p-1.5 text-gray-500 hover:bg-gray-200/70 hover:text-gray-800 rounded-lg transition-all"
+          >
+            <Wallet className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={onShowSettings}
+            title="Settings"
+            className="p-1.5 text-gray-500 hover:bg-gray-200/70 hover:text-gray-800 rounded-lg transition-all"
+          >
+            <Settings className="w-3.5 h-3.5" />
+          </button>
+
+          <button
+            onClick={onLogout}
+            title="Logout"
+            className="p-1.5 text-gray-500 hover:bg-red-100 hover:text-red-600 rounded-lg transition-all"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+          </button>
+        </div>
       </div>
     </div>
   )

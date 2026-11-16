@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react'
 import Sidebar from './components/Sidebar'
+import TopBar from './components/TopBar'
 import EmailList from './components/EmailList'
 import EmailDetail from './components/EmailDetail'
 import ComposeModal from './components/ComposeModal'
@@ -34,6 +35,7 @@ function App() {
   const [currentView, setCurrentView] = useState('inbox')
   const [inboxView, setInboxView] = useState('inbox')
   const [knoccFilter, setKnoccFilter] = useState('all')
+  const [globalSearch, setGlobalSearch] = useState('')
 
   // ── Auth check on mount ────────────────────────────────────────────────────
   useEffect(() => {
@@ -183,34 +185,49 @@ function App() {
   const draftCount = draftEmails.length
 
   return (
-    <div className="flex h-screen bg-white">
-      <div className="flex flex-1 overflow-hidden">
-        <Sidebar
-          onCompose={() => setShowCompose(true)}
-          onShowKnoccRequests={() => {
-            setCurrentView('knocc-requests')
-            setInboxView('all')
-            setSelectedEmail(null)
-          }}
-          onShowInbox={() => {
-            setCurrentView('inbox')
-            setInboxView('inbox')
-          }}
-          onShowSettings={() => setShowSettings(true)}
-          onShowWallet={() => setShowWallet(true)}
-          onNavigate={(view) => {
-            setCurrentView(view)
-            setSelectedEmail(null)
-          }}
-          currentView={currentView}
-          unreadCount={unreadCount}
-          knoccRequestCount={knoccRequestCount}
-          draftCount={draftCount}
+    <div className="flex h-screen" style={{ background: '#f6f8fc' }}>
+
+      {/* Sidebar — full height on the left */}
+      <Sidebar
+        onCompose={() => setShowCompose(true)}
+        onShowKnoccRequests={() => {
+          setCurrentView('knocc-requests')
+          setInboxView('all')
+          setSelectedEmail(null)
+        }}
+        onShowInbox={() => {
+          setCurrentView('inbox')
+          setInboxView('inbox')
+        }}
+        onShowSettings={() => setShowSettings(true)}
+        onShowWallet={() => setShowWallet(true)}
+        onNavigate={(view) => {
+          setCurrentView(view)
+          setSelectedEmail(null)
+        }}
+        currentView={currentView}
+        unreadCount={unreadCount}
+        knoccRequestCount={knoccRequestCount}
+        draftCount={draftCount}
+        user={user}
+        onLogout={handleLogout}
+      />
+
+      {/* Right side: TopBar on top, then EmailList + EmailDetail below */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+
+        {/* Top bar — only over the right two columns */}
+        <TopBar
           user={user}
+          onCompose={() => setShowCompose(true)}
+          onShowSettings={() => setShowSettings(true)}
           onLogout={handleLogout}
+          searchQuery={globalSearch}
+          onSearchChange={setGlobalSearch}
         />
 
-        <div className="flex-1 flex relative">
+        {/* Email list + detail */}
+        <div className="flex flex-1 overflow-hidden">
           <EmailList
             emails={getDisplayEmails()}
             selectedEmail={selectedEmail}
@@ -235,6 +252,7 @@ function App() {
               setSelectedEmail(null)
             }}
             onDeleteEmails={handleDeleteEmails}
+            searchQuery={globalSearch}
           />
 
           <EmailDetail
@@ -243,7 +261,6 @@ function App() {
             onClose={() => setSelectedEmail(null)}
             onRefresh={handleRefresh}
             onApproved={(sender) => {
-              // Navigate to inbox and open a compose window pre-filled to the new contact
               setCurrentView('inbox')
               setInboxView('inbox')
               setSelectedEmail(null)
