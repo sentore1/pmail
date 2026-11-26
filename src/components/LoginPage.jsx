@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Mail, Eye, EyeOff, ArrowLeft, CheckCircle } from 'lucide-react'
 import OnboardingFlow from './OnboardingFlow'
 import TermsOfService from './TermsOfService'
@@ -18,6 +18,28 @@ function LoginPage({ onLogin }) {
   })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+
+  // ── Auto-suggest (gender / country / age) ──────────────────────────────────
+  const [suggestions, setSuggestions] = useState({})
+  const suggestTimer = useRef(null)
+
+  // Fire when name changes — debounced 400ms, sends timezone + language for best accuracy
+  useEffect(() => {
+    if (isLogin || !formData.name || formData.name.trim().length < 3) {
+      setSuggestions({})
+      return
+    }
+    clearTimeout(suggestTimer.current)
+    suggestTimer.current = setTimeout(async () => {
+      try {
+        const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+        const lang = navigator.language || navigator.languages?.[0] || null
+        const data = await authAPI.suggest(formData.name.trim(), tz, lang)
+        if (data.confidence > 0) setSuggestions(data)
+      } catch { /* silent — suggestions are optional */ }
+    }, 400)
+    return () => clearTimeout(suggestTimer.current)
+  }, [formData.name, isLogin])
 
   // ── Forgot / Reset password state ──────────────────────────────────────────
   const [view, setView] = useState('auth') // 'auth' | 'forgot' | 'reset'
@@ -157,15 +179,14 @@ function LoginPage({ onLogin }) {
 
   const switchMode = () => {
     if (!isLogin) {
-      // Switching to login from signup
       setShowOnboarding(false);
     } else {
-      // Switching to signup - show onboarding
       setShowOnboarding(true);
     }
     setIsLogin(!isLogin)
     setStep(1)
     setError('')
+    setSuggestions({})
   }
 
   // If showing onboarding flow, render that instead
@@ -220,7 +241,7 @@ function LoginPage({ onLogin }) {
                         type="text"
                         value={forgotEmail}
                         onChange={e => setForgotEmail(e.target.value)}
-                        className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
+                        className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
                         placeholder="Username or email"
                         autoFocus
                       />
@@ -311,7 +332,7 @@ function LoginPage({ onLogin }) {
                           type={showResetPassword ? 'text' : 'password'}
                           value={resetPassword}
                           onChange={e => setResetPassword(e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-500"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-400"
                           placeholder="At least 8 characters"
                           autoFocus
                         />
@@ -328,7 +349,7 @@ function LoginPage({ onLogin }) {
                           type={showResetConfirm ? 'text' : 'password'}
                           value={resetConfirm}
                           onChange={e => setResetConfirm(e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-500"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-400"
                           placeholder="Repeat new password"
                         />
                         <button type="button" onClick={() => setShowResetConfirm(!showResetConfirm)} className="pr-3 text-gray-500 hover:text-gray-700">
@@ -410,7 +431,7 @@ function LoginPage({ onLogin }) {
                     value={formData.email}
                     onChange={handleChange}
                     required
-                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
+                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
                     placeholder={isLogin ? 'Username or email' : 'Email'}
                     autoFocus
                   />
@@ -448,7 +469,7 @@ function LoginPage({ onLogin }) {
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
+                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
                       placeholder="First and last name"
                       autoFocus
                     />
@@ -464,7 +485,7 @@ function LoginPage({ onLogin }) {
                         value={formData.password}
                         onChange={handleChange}
                         required
-                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-500"
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-400"
                         placeholder={isLogin ? 'Enter your password' : 'Create a password'}
                         autoFocus={isLogin}
                       />
@@ -505,7 +526,55 @@ function LoginPage({ onLogin }) {
             {/* Step 3: Profile Details (Signup only) */}
             {step === 3 && !isLogin && (
               <>
-                <h3 className="text-lg font-medium text-gray-900 mb-4">Complete your profile</h3>
+                <h3 className="text-lg font-medium text-gray-900 mb-1">Complete your profile</h3>
+
+                {/* Suggestion chips — appear when backend inferred something */}
+                {(suggestions.gender || suggestions.country || suggestions.ageRange) && (
+                  <div className="mb-4 p-3 bg-blue-50 rounded-2xl">
+                    <p className="text-xs text-blue-500 font-medium mb-2">Suggested for you</p>
+                    <div className="flex flex-wrap gap-2">
+                      {suggestions.gender && !formData.gender && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(f => ({ ...f, gender: suggestions.gender }))}
+                          className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 rounded-full text-xs text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                          <span className="text-blue-400">Gender</span>
+                          <span className="font-medium capitalize">{suggestions.gender}</span>
+                          <span className="text-blue-300 text-[10px]">tap to apply</span>
+                        </button>
+                      )}
+                      {suggestions.country && !formData.country && (
+                        <button
+                          type="button"
+                          onClick={() => setFormData(f => ({ ...f, country: suggestions.country }))}
+                          className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 rounded-full text-xs text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                          <span className="text-blue-400">Country</span>
+                          <span className="font-medium">{suggestions.country}</span>
+                          {suggestions.dialCode && <span className="text-blue-400">{suggestions.dialCode}</span>}
+                          <span className="text-blue-300 text-[10px]">tap to apply</span>
+                        </button>
+                      )}
+                      {suggestions.ageRange && !formData.age && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const mid = suggestions.ageRange.split('-')
+                            const midAge = Math.round((parseInt(mid[0]) + parseInt(mid[1])) / 2)
+                            setFormData(f => ({ ...f, age: String(midAge) }))
+                          }}
+                          className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 rounded-full text-xs text-blue-700 hover:bg-blue-100 transition-colors"
+                        >
+                          <span className="text-blue-400">Age range</span>
+                          <span className="font-medium">{suggestions.ageRange}</span>
+                          <span className="text-blue-300 text-[10px]">tap to apply</span>
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-[10px] text-blue-400 mt-1.5">Inferred from your name · you can change these</p>
+                  </div>
+                )}
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
@@ -515,8 +584,8 @@ function LoginPage({ onLogin }) {
                       name="phoneNumber"
                       value={formData.phoneNumber}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
-                      placeholder="+1234567890"
+                      className="w-full px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
+                      placeholder={suggestions.dialCode ? `${suggestions.dialCode} ...` : '+1234567890'}
                     />
                   </div>
                   <div>
@@ -526,7 +595,7 @@ function LoginPage({ onLogin }) {
                       name="age"
                       value={formData.age}
                       onChange={handleChange}
-                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
+                      className="w-full px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
                       placeholder="25"
                     />
                   </div>
@@ -622,7 +691,7 @@ function LoginPage({ onLogin }) {
                       onChange={handleChange}
                       min="1"
                       step="0.01"
-                      className="w-full px-3 py-1.5 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-500"
+                      className="w-full px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
                       placeholder="1.00"
                     />
                     <p className="mt-1 text-xs text-gray-600">

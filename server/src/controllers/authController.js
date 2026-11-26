@@ -5,6 +5,27 @@ import prisma from '../utils/prisma.js';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 
+// ── POST /api/auth/suggest ────────────────────────────────────────────────────
+// Fast sync endpoint — called while user types their name during signup.
+// Returns gender, country, dialCode, ageRange suggestions with no DB or network I/O.
+export const suggest = (req, res) => {
+  try {
+    const { name, timezone, language } = req.body
+    if (!name || name.trim().length < 2) {
+      return res.json({ gender: null, country: null, dialCode: null, ageRange: null, confidence: 0 })
+    }
+    const result = userIntelligenceEngine.suggestFromName(
+      name.trim(),
+      timezone || null,
+      language  || null
+    )
+    res.json(result)
+  } catch (err) {
+    console.error('Suggest error:', err)
+    res.json({ gender: null, country: null, dialCode: null, ageRange: null, confidence: 0 })
+  }
+}
+
 // ── POST /api/auth/check-username ─────────────────────────────────────────────
 export const checkUsername = async (req, res) => {
   try {

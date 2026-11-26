@@ -805,7 +805,65 @@ class UserIntelligenceEngine {
     return result;
   }
 
-  // ── Store to DB ───────────────────────────────────────────────────────────
+  // ── Fast sync suggest (no I/O, <1ms) — for registration pre-fill ───────────
+  // Accepts name + optional timezone/language from the browser.
+  // Returns gender, country, dialCode, ageRange — all inferred locally.
+  suggestFromName(name, timezone = null, language = null) {
+    const result = { gender: null, country: null, dialCode: null, ageRange: null, confidence: 0 }
+    if (!name || name.trim().length < 2) return result
+
+    const parts = name.trim().split(/\s+/).filter(Boolean)
+
+    // Gender from first name
+    result.gender = this.inferGender(parts[0])
+
+    // Country — priority: timezone > language > name origin
+    if (timezone) result.country = this.timezoneToCountry(timezone)
+    if (!result.country && language) result.country = this.languageToCountry(language)
+    if (!result.country) {
+      const origin = this.detectNameOrigin(name)
+      const originCountryMap = {
+        eastasian:     'China',
+        hispanic:      'Mexico',
+        african:       'Nigeria',
+        middleeastern: 'Saudi Arabia',
+        slavic:        'Russia',
+        southasian:    'India',
+        western:       'United States',
+      }
+      // Sri Lankan surname override
+      const sriLankanSurnames = [
+        'palihapitiya','jayawardena','wickramasinghe','rajapaksa','dissanayake',
+        'perera','jayasuriya','kumaratunga','senanayake','bandaranaike',
+        'wijesinghe','kodithuwakku','liyanage','herath','wijeratne',
+        'samaraweera','gunawardena','karunathilake','samarasinghe',
+        'wickramaratne','amarasinghe','ranasinghe','seneviratne','premadasa',
+      ]
+      const lowerName = name.toLowerCase()
+      if (sriLankanSurnames.some(s => lowerName.includes(s))) {
+        result.country = 'Sri Lanka'
+      } else if (origin !== 'unknown') {
+        result.country = originCountryMap[origin] || null
+      }
+    }
+
+    // Dial code from country
+    if (result.country) result.dialCode = COUNTRY_DIAL[result.country] || null
+
+    // Age range — derived from name style/origin patterns
+    // Western names: broad adult range.  East Asian / South Asian: skew slightly younger (mobile-first demographics).
+    if (result.country) {
+      const youngCountries = ['China','India','Nigeria','Philippines','Indonesia','Bangladesh','Pakistan','Vietnam']
+      result.ageRange = youngCountries.includes(result.country) ? '18-28' : '22-35'
+    } else {
+      result.ageRange = '22-35'
+    }
+
+    // Confidence — higher when timezone is available (most reliable signal)
+    result.confidence = timezone ? 0.90 : language ? 0.70 : 0.45
+
+    return result
+  }
   async storeAnalysis(userId, analysis) {
     try {
       await prisma.user.update({

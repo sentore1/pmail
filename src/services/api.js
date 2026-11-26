@@ -38,6 +38,15 @@ export const authAPI = {
     return handleResponse(response);
   },
 
+  suggest: async (name, timezone, language) => {
+    const response = await fetch(`${API_URL}/auth/suggest`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, timezone, language }),
+    })
+    return handleResponse(response)
+  },
+
   checkUsername: async (username) => {
     const response = await fetch(`${API_URL}/auth/check-username`, {
       method: 'POST',
