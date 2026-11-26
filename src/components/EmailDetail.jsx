@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react'
-import { User, CheckCircle, XCircle, Bell, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, MoreHorizontal } from 'lucide-react'
+import { User, CheckCircle, XCircle, Bell, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, MoreHorizontal, Shield, AlertTriangle } from 'lucide-react'
 import DOMPurify from 'dompurify'
-import { knoccAPI, userAPI, emailAPI, walletAPI } from '../services/api'
+import { knoccAPI, userAPI, emailAPI, walletAPI, inboundAPI } from '../services/api'
 import ComposeModal from './ComposeModal'
 
 // Instagram/Twitter-style verification badge
@@ -31,6 +31,10 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
   // Inline reply/forward state
   const [replyMode, setReplyMode] = useState(null) // null | 'reply' | 'forward'
 
+  // Inbound accept/decline state
+  const [inboundDecision, setInboundDecision] = useState(null) // null | 'accepted' | 'declined'
+  const [inboundLoading, setInboundLoading] = useState(false)
+
   const [expandedIds, setExpandedIds] = useState(() => {
     const t = email?._thread || (email ? [email] : [])
     return new Set(t.length ? [t[t.length - 1].id] : [])
@@ -41,7 +45,59 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
     setExpandedIds(new Set(t.length ? [t[t.length - 1].id] : []))
     setActionError('')
     setReplyMode(null)
+    setInboundDecision(null)
   }, [email?.id])
+
+  // ── Inbound: find a PAID InboundRequest linked to this email (awaiting Accept/Decline) ──
+  const [pendingInbound, setPendingInbound] = useState(null)
+
+  useEffect(() => {
+    if (!email?.id) { setPendingInbound(null); return }
+    let active = true
+    const find = async () => {
+      try {
+        const res = await inboundAPI.listRequests()
+        const match = (res.requests || []).find(
+          (r) => r.emailId === email.id && (r.status === 'PAID' || r.status === 'ACCEPTED' || r.status === 'DECLINED')
+        )
+        if (active) setPendingInbound(match || null)
+      } catch {
+        if (active) setPendingInbound(null)
+      }
+    }
+    find()
+    return () => { active = false }
+  }, [email?.id])
+
+  const handleAcceptInbound = async () => {
+    if (!pendingInbound) return
+    setInboundLoading(true)
+    setActionError('')
+    try {
+      await inboundAPI.accept(pendingInbound.id)
+      setInboundDecision('accepted')
+      if (onRefresh) onRefresh()
+    } catch (err) {
+      setActionError(err.message || 'Failed to accept message')
+    } finally {
+      setInboundLoading(false)
+    }
+  }
+
+  const handleDeclineInbound = async () => {
+    if (!pendingInbound) return
+    setInboundLoading(true)
+    setActionError('')
+    try {
+      await inboundAPI.decline(pendingInbound.id)
+      setInboundDecision('declined')
+      setTimeout(() => { onClose(); if (onRefresh) onRefresh() }, 1500)
+    } catch (err) {
+      setActionError(err.message || 'Failed to decline message')
+    } finally {
+      setInboundLoading(false)
+    }
+  }
 
   useEffect(() => {
     if (!email && isRequestView) fetchPeople()
@@ -453,6 +509,61 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
         {actionError && (
           <div className="mx-5 mt-2 p-3 bg-red-50 border border-red-200 rounded-2xl text-sm text-red-600 flex items-start gap-2">
             <XCircle className="w-4 h-4 flex-shrink-0 mt-0.5" /><span>{actionError}</span>
+          </div>
+        )}
+
+        {/* ── Inbound paid email: Accept / Decline decision ── */}
+        {pendingInbound && (
+          <div className="mx-3 my-2 rounded-[18px] border border-blue-200 bg-blue-50/50 p-4">
+            {pendingInbound.status === 'PAID' && !inboundDecision ? (
+              <>
+                <div className="flex items-start gap-3 mb-3">
+                  <div className="w-9 h-9 bg-blue-100 rounded-full flex items-center justify-center flex-shrink-0">
+                    <Shield className="w-4.5 h-4.5 text-blue-600" />
+                  </div>
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-gray-900">
+                      Paid inbound message — awaiting your decision
+                    </p>
+                    <p className="text-xs text-gray-500 mt-0.5">
+                      {pendingInbound.externalName || pendingInbound.externalEmail} paid
+                      <span className="font-semibold text-gray-700"> ${pendingInbound.inboundFee.toFixed(2)}</span> to
+                      deliver this email. Accept to keep it in your inbox and open the conversation,
+                      or Decline to remove it and refund them.
+                    </p>
+                  </div>
+                </div>
+                <div className="flex gap-2">
+                  <button
+                    onClick={handleAcceptInbound}
+                    disabled={inboundLoading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-green-600 hover:bg-green-700
+                               disabled:bg-green-300 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    {inboundLoading ? 'Processing…' : 'Accept'}
+                  </button>
+                  <button
+                    onClick={handleDeclineInbound}
+                    disabled={inboundLoading}
+                    className="flex-1 flex items-center justify-center gap-2 bg-red-600 hover:bg-red-700
+                               disabled:bg-red-300 text-white py-2.5 rounded-xl text-sm font-medium transition-colors"
+                  >
+                    <XCircle className="w-4 h-4" />
+                    {inboundLoading ? 'Processing…' : 'Decline'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div className={`flex items-center gap-2 text-sm font-medium ${
+                (inboundDecision === 'accepted' || pendingInbound.status === 'ACCEPTED')
+                  ? 'text-green-700' : 'text-red-700'
+              }`}>
+                {(inboundDecision === 'accepted' || pendingInbound.status === 'ACCEPTED')
+                  ? <><CheckCircle className="w-4 h-4" /> Message accepted — the sender can continue the conversation.</>
+                  : <><XCircle className="w-4 h-4" /> Message declined — the sender has been refunded.</>}
+              </div>
+            )}
           </div>
         )}
 

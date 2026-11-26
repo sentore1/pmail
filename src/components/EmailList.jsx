@@ -428,6 +428,16 @@ function EmailList({
                           <p className={`text-xs truncate ${isUnread ? 'font-semibold text-[#202124]' : 'text-[#202124]'}`}>
                             {subjectText}
                           </p>
+                          {thread.inboundRequest?.status === 'PAID' && (
+                            <span className="flex-shrink-0 text-[10px] font-semibold bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded-full">
+                              Decide
+                            </span>
+                          )}
+                          {thread.inboundRequest?.status === 'ACCEPTED' && (
+                            <span className="flex-shrink-0 text-[10px] font-semibold bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full">
+                              Accepted
+                            </span>
+                          )}
                         </div>
                         {/* Row 3: preview */}
                         <p className="text-xs text-[#707782] truncate">{previewText}</p>

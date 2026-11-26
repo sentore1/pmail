@@ -32,6 +32,7 @@ export const authenticate = async (req, res, next) => {
         autoApprove: true,
         requireReason: true,
         chatExpiryMonths: true,
+        inboundFee: true,
       },
     });
 

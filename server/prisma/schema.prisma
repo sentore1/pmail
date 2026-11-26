@@ -36,6 +36,10 @@ model User {
   // Chat expiry: null = never expires, otherwise months of inactivity before re-Knocc required
   chatExpiryMonths  Int?
 
+  // Inbound fee: cost for an external (non-Pryro) user to send an email to this user.
+  // 0 = free (email delivered immediately). > 0 = sender must pay before email is revealed.
+  inboundFee        Float     @default(0.0)
+
   // Gmail AI learning
   gmailAccessEnabled Boolean  @default(false)
   gmailRefreshToken  String?  // Encrypted refresh token for offline access
@@ -63,6 +67,9 @@ model User {
 
   // Pay-to-reply invitations sent by this user to external addresses
   payToReplyInvitations  PayToReplyInvitation[]
+
+  // Inbound requests received from external senders
+  inboundRequests   InboundRequest[]
 
   // Password reset tokens
   passwordResetTokens    PasswordResetToken[]
@@ -95,6 +102,9 @@ model Email {
   // Pay-to-reply invitations for emails sent to external addresses
   payToReplyInvitations PayToReplyInvitation[]
 
+  // If this email was created when a Pryro user accepted an inbound request
+  inboundRequest  InboundRequest? @relation("InboundEmail")
+
   // Draft support
   isDraft     Boolean   @default(false)
 
@@ -107,6 +117,55 @@ model Email {
   @@index([senderId])
   @@index([sentAt])
   @@index([isDraft])
+}
+
+// ─── Inbound email from an external (non-Pryro) sender ──────────────────────
+// When a non-Pryro user sends an email to a Pryro user via the inbound webhook
+// or SMTP gateway, an InboundRequest is created.
+//
+// Flow:
+//   PENDING  → external sender receives a "pay to view" notification email with a link
+//   PAID     → Pryro recipient can now read the email body; must Accept or Decline
+//   ACCEPTED → Pryro user accepted the message; they can reply via ComposeModal
+//   DECLINED → Pryro user declined; external sender optionally notified
+//   EXPIRED  → no payment / no action within the expiry window
+model InboundRequest {
+  id              String    @id @default(uuid())
+
+  // The Pryro user this email was addressed to
+  recipientId     String
+  recipient       User      @relation(fields: [recipientId], references: [id], onDelete: Cascade)
+
+  // External sender details
+  externalEmail   String
+  externalName    String    @default("")
+
+  // The email content (stored raw so it can be revealed after payment)
+  subject         String
+  body            String    @default("")
+
+  // Fee charged to the external sender (0 = free — delivered immediately)
+  inboundFee      Float     @default(0)
+
+  // Unique token that secures the external payment/view page
+  payToken        String    @unique
+
+  // Lifecycle
+  status          String    @default("PENDING") // PENDING | PAID | ACCEPTED | DECLINED | EXPIRED
+
+  paidAt          DateTime?
+  acceptedAt      DateTime?
+  declinedAt      DateTime?
+  createdAt       DateTime  @default(now())
+
+  // If the Pryro user accepts, an Email record is created so the message appears in inbox
+  emailId         String?   @unique
+  email           Email?    @relation("InboundEmail", fields: [emailId], references: [id], onDelete: SetNull)
+
+  @@index([recipientId])
+  @@index([payToken])
+  @@index([status])
+  @@index([externalEmail])
 }
 
 // Pay-to-reply invitation — tracks an email sent to an external address

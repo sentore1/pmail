@@ -260,8 +260,7 @@ function LoginPage({ onLogin }) {
           </div>
           <div className="hidden lg:flex flex-1 items-center justify-center">
             <div className="text-center">
-              <h2 className="tracking-tight" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
-              <p className="mt-1 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+              <h2 className="tracking-tight leading-none" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
             </div>
           </div>
         </div>
@@ -371,8 +370,7 @@ function LoginPage({ onLogin }) {
           </div>
           <div className="hidden lg:flex flex-1 items-center justify-center">
             <div className="text-center">
-              <h2 className="tracking-tight" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
-              <p className="mt-1 text-xl text-gray-600 font-light">Professional email with Knocc</p>
+              <h2 className="tracking-tight leading-none" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
             </div>
           </div>
         </div>
@@ -438,7 +436,7 @@ function LoginPage({ onLogin }) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                    className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
                   >
                     Next
                   </button>
@@ -485,6 +483,7 @@ function LoginPage({ onLogin }) {
                         value={formData.password}
                         onChange={handleChange}
                         required
+                        autoComplete="current-password"
                         className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-400"
                         placeholder={isLogin ? 'Enter your password' : 'Create a password'}
                         autoFocus={isLogin}
@@ -515,7 +514,7 @@ function LoginPage({ onLogin }) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-2 bg-[#0184ff] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
+                    className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0"
                   >
                     {loading ? 'Please wait...' : isLogin ? 'Sign in' : 'Next'}
                   </button>
@@ -701,7 +700,7 @@ function LoginPage({ onLogin }) {
                   <button
                     type="submit"
                     disabled={loading}
-                    className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0 mt-6"
+                    className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex-shrink-0 mt-6"
                   >
                     {loading ? 'Please wait...' : 'Create account'}
                   </button>
@@ -716,24 +715,23 @@ function LoginPage({ onLogin }) {
         {/* Right Side - Large Pmail Branding */}
         <div className="hidden lg:flex flex-1 items-center justify-center">
           <div className="text-center">
-            <h2 className="tracking-tight" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>
+            <h2 className="tracking-tight leading-none" style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>
               pmail
             </h2>
-            <p className="mt-1 text-xl text-gray-600 font-light">
-              Professional email with Knocc
-            </p>
           </div>
         </div>
       </div>
       </div>
 
       {/* Footer - pinned to bottom right */}
-      <div className="text-left pb-2">
+      <div className="absolute bottom-4 right-8 text-right">
+        <p className="text-sm text-gray-500 font-light leading-none">Professional email with Knocc — An inbox for people worth reaching.</p>
         <p className="text-xs text-gray-400">
           By continuing, you agree to pmail's{' '}
           <button type="button" onClick={() => setShowTerms(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Terms of Service</button>
           {' & '}
           <button type="button" onClick={() => setShowPrivacy(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Privacy Policy</button>
+          {' · by pryro:148431003'}
         </p>
       </div>
     </div>

@@ -15,6 +15,23 @@ body {
   box-sizing: border-box;
 }
 
+/* Hide browser native password reveal button (Edge/Chrome on Windows) */
+input[type="password"]::-ms-reveal,
+input[type="password"]::-ms-clear {
+  display: none;
+}
+input[type="password"]::-webkit-credentials-auto-fill-button {
+  display: none;
+}
+
+/* Hide browser autofill/autocomplete button injected into inputs */
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button {
+  display: none !important;
+  visibility: hidden;
+  pointer-events: none;
+}
+
 /* Placeholder styling */
 input::placeholder {
   color: #9ca3af !important;

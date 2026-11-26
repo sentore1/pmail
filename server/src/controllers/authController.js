@@ -4,6 +4,7 @@ import { generateToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
+import { createMailbox } from '../services/mailcowService.js';
 
 // ── POST /api/auth/suggest ────────────────────────────────────────────────────
 // Fast sync endpoint — called while user types their name during signup.
@@ -112,6 +113,9 @@ export const register = async (req, res) => {
     ).then(analysis => {
       userIntelligenceEngine.storeAnalysis(user.id, analysis);
     }).catch(() => { /* silent */ });
+
+    // Create Mailcow mailbox in background — never block registration
+    createMailbox(username.toLowerCase().trim(), password, name.trim()).catch(() => {});
 
     const token = generateToken(user.id);
     res.status(201).json({ message: 'Account created successfully', user, token });

@@ -1,10 +1,17 @@
 import express from 'express';
-import { addFunds, getBalance, getTransactions, createLightningInvoice, checkInvoiceStatus, withdrawFunds, createStripePaymentIntent, confirmStripePayment } from '../controllers/walletController.js';
+import { addFunds, getBalance, getTransactions, createLightningInvoice, checkInvoiceStatus, withdrawFunds, createStripePaymentIntent, confirmStripePayment, initiateMomoPayment, checkMomoPayment, momoWebhook } from '../controllers/walletController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
 
+// MoMo webhook — no auth (called by MTN servers)
+router.post('/momo/webhook', momoWebhook);
+
 router.use(authenticate);
+
+// MoMo routes
+router.post('/momo/initiate', initiateMomoPayment);
+router.get('/momo/status/:referenceId', checkMomoPayment);
 
 // Stripe payment routes
 router.post('/stripe/create-payment-intent', createStripePaymentIntent);

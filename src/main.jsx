@@ -2,14 +2,35 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import App from './App'
 import ReplyPage from './components/ReplyPage'
+import InboundPayPage from './components/InboundPayPage'
+import InboundSendPage from './components/InboundSendPage'
 import './index.css'
 
-// If the URL contains ?reply=<token>, render the public reply page for external
-// recipients instead of the main authenticated app.
-const replyToken = new URLSearchParams(window.location.search).get('reply')
+const params = new URLSearchParams(window.location.search)
+
+// ?reply=<token>   — external user paying to reply to an outbound email
+const replyToken = params.get('reply')
+
+// ?inbound=<token> — external sender paying the inbound delivery fee
+const inboundToken = params.get('inbound')
+
+// ?send=<pryro-email> — external sender composing a new message to a Pryro user
+const sendTo = params.get('send')
+
+let root
+
+if (replyToken) {
+  root = <ReplyPage token={replyToken} />
+} else if (inboundToken) {
+  root = <InboundPayPage token={inboundToken} />
+} else if (sendTo) {
+  root = <InboundSendPage recipientEmail={decodeURIComponent(sendTo)} />
+} else {
+  root = <App />
+}
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    {replyToken ? <ReplyPage token={replyToken} /> : <App />}
+    {root}
   </React.StrictMode>,
 )

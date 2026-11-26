@@ -6,17 +6,26 @@ let etherealInfo = null;
 
 /**
  * Get (or lazily create) the Nodemailer transporter.
- *
- * If SMTP_HOST / SMTP_USER / SMTP_PASS are set in .env, uses the configured
- * production SMTP server.  Otherwise falls back to an auto-generated Ethereal
- * test account (messages are not actually delivered — a preview URL is logged).
+ * Priority: Mailcow SMTP > generic SMTP > Ethereal (dev fallback)
  */
 export const getTransporter = async () => {
   if (transporter) return transporter;
 
-  const { SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_PORT, SMTP_SECURE } = process.env;
+  const {
+    MAILCOW_SMTP_HOST, MAILCOW_SMTP_PORT, MAILCOW_SMTP_SECURE,
+    MAILCOW_SMTP_USER, MAILCOW_SMTP_PASS,
+    SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_PORT, SMTP_SECURE,
+  } = process.env;
 
-  if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
+  if (MAILCOW_SMTP_HOST && MAILCOW_SMTP_USER && MAILCOW_SMTP_PASS) {
+    transporter = nodemailer.createTransport({
+      host: MAILCOW_SMTP_HOST,
+      port: parseInt(MAILCOW_SMTP_PORT || '587', 10),
+      secure: MAILCOW_SMTP_SECURE === 'true',
+      auth: { user: MAILCOW_SMTP_USER, pass: MAILCOW_SMTP_PASS },
+    });
+    console.log(`📧 Mailcow SMTP transport configured for ${MAILCOW_SMTP_HOST}`);
+  } else if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
     transporter = nodemailer.createTransport({
       host: SMTP_HOST,
       port: parseInt(SMTP_PORT || '587', 10),
@@ -25,7 +34,6 @@ export const getTransporter = async () => {
     });
     console.log(`📧 SMTP transport configured for ${SMTP_HOST}:${SMTP_PORT || 587}`);
   } else {
-    // Development fallback — Ethereal test account
     const testAccount = await nodemailer.createTestAccount();
     etherealInfo = testAccount;
     transporter = nodemailer.createTransport({
@@ -103,11 +111,13 @@ const buildOutboundHtml = ({ senderName, subject, body, replyUrl, replyFee }) =>
  * @param {number} params.replyFee     — fee required to reply (0 = free)
  * @returns {object} — Nodemailer info (includes `messageId` and, for Ethereal, `previewUrl`)
  */
-export const sendExternalEmail = async ({ to, senderName, subject, body, replyUrl, replyFee }) => {
+export const sendExternalEmail = async ({ to, senderName, senderUsername, subject, body, replyUrl, replyFee }) => {
   const transport = await getTransporter();
 
-  const fromName = process.env.SMTP_FROM_NAME || 'Pmail';
-  const fromEmail = process.env.SMTP_FROM_EMAIL || 'noreply@pmail.app';
+  const fromEmail = senderUsername && process.env.MAILCOW_SMTP_HOST
+    ? `${senderUsername.toLowerCase()}@${process.env.MAIL_DOMAIN || 'pryro.com'}`
+    : (process.env.SMTP_FROM_EMAIL || 'noreply@pmail.app');
+  const fromName = senderName || process.env.SMTP_FROM_NAME || 'Pmail';
 
   const info = await transport.sendMail({
     from: `"${fromName}" <${fromEmail}>`,

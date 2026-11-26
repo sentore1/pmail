@@ -391,7 +391,34 @@ export const getInbox = async (req, res) => {
       stars: undefined,
     }));
 
-    res.json({ emails });
+    // Annotate emails that have a linked InboundRequest awaiting a decision
+    const emailIds = emails.map((e) => e.id);
+    const inboundLinks = emailIds.length > 0
+      ? await prisma.inboundRequest.findMany({
+          where: {
+            emailId:     { in: emailIds },
+            recipientId: userId,
+            status:      { in: ['PAID', 'ACCEPTED', 'DECLINED'] },
+          },
+          select: {
+            id:            true,
+            emailId:       true,
+            status:        true,
+            inboundFee:    true,
+            externalEmail: true,
+            externalName:  true,
+          },
+        })
+      : [];
+
+    const inboundByEmailId = Object.fromEntries(inboundLinks.map((r) => [r.emailId, r]));
+
+    const annotated = emails.map((e) => ({
+      ...e,
+      inboundRequest: inboundByEmailId[e.id] || null,
+    }));
+
+    res.json({ emails: annotated });
   } catch (error) {
     console.error('Get inbox error:', error);
     res.status(500).json({ error: 'Failed to get inbox' });

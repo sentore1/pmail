@@ -147,7 +147,7 @@ export const getContacts = async (req, res) => {
 export const updateProfile = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { name, phoneNumber, age, gender, country, knoccPrice, autoApprove, requireReason, chatExpiryMonths } = req.body;
+    const { name, phoneNumber, age, gender, country, knoccPrice, autoApprove, requireReason, chatExpiryMonths, inboundFee } = req.body;
 
     const user = await prisma.user.update({
       where: { id: userId },
@@ -164,12 +164,15 @@ export const updateProfile = async (req, res) => {
         ...(chatExpiryMonths !== undefined && {
           chatExpiryMonths: chatExpiryMonths === null || chatExpiryMonths === '' ? null : parseInt(chatExpiryMonths),
         }),
+        ...(inboundFee !== undefined && {
+          inboundFee: Math.max(0, parseFloat(inboundFee) || 0),
+        }),
       },
       select: {
         id: true, name: true, email: true, phoneNumber: true,
         age: true, gender: true, country: true, knoccPrice: true,
         verified: true, walletBalance: true, autoApprove: true,
-        requireReason: true, chatExpiryMonths: true,
+        requireReason: true, chatExpiryMonths: true, inboundFee: true,
       },
     });
 

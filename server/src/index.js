@@ -10,6 +10,8 @@ import invitationRoutes from './routes/invitations.js';
 import googleRoutes from './routes/google.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import payToReplyRoutes from './routes/payToReply.js';
+import inboundRoutes from './routes/inbound.js';
+import { startInboundSmtpServer } from './services/inboundSmtpServer.js';
 
 dotenv.config();
 
@@ -34,6 +36,7 @@ app.use('/api/invitations', invitationRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/pay-to-reply', payToReplyRoutes);
+app.use('/api/inbound', inboundRoutes);
 
 // Health check
 app.get('/api/health', (req, res) => {
@@ -52,4 +55,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Pmail server running on http://localhost:${PORT}`);
+  // Start the optional inbound SMTP receiver (disabled unless INBOUND_SMTP_PORT is set)
+  startInboundSmtpServer();
 });

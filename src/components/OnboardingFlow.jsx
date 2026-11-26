@@ -286,7 +286,7 @@ function OnboardingFlow({ onComplete, onBack }) {
   const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
 
   return (
-    <div className="min-h-screen bg-white flex flex-col p-8">
+    <div className="relative min-h-screen bg-white flex flex-col p-8">
       {showTerms && <TermsOfService onBack={() => setShowTerms(false)} />}
       {showPrivacy && <PrivacyPolicy onBack={() => setShowPrivacy(false)} />}
       {!showTerms && !showPrivacy && (<>
@@ -331,7 +331,7 @@ function OnboardingFlow({ onComplete, onBack }) {
                     <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
                       placeholder="Last name" className={inputCls} />
                     <button type="submit" disabled={loading}
-                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
+                      className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                       {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                       {loading ? 'Creating account…' : 'Next'}
                     </button>
@@ -367,10 +367,10 @@ function OnboardingFlow({ onComplete, onBack }) {
                         value={username}
                         onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
                         placeholder="yourname"
-                        autoFocus
+                        autoComplete="off"
                         className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
                       />
-                      <span className="text-gray-400 text-sm pr-2 whitespace-nowrap select-none">@pryro.com</span>
+                      <span className="text-gray-400 text-base pr-2 whitespace-nowrap select-none">@pryro.com</span>
                       <div className="pr-3">
                         {usernameStatus === 'checking' && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
                         {usernameStatus === 'available' && <Check className="w-4 h-4 text-green-500" />}
@@ -399,11 +399,12 @@ function OnboardingFlow({ onComplete, onBack }) {
 
                   {/* Password */}
                   <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-gray-400 bg-white overflow-hidden">
+                    <div className="flex items-center max-w-xs bg-gray-100 rounded-2xl overflow-hidden">
                       <input type={showPassword ? 'text' : 'password'} value={password}
                         onChange={e => setPassword(e.target.value)}
                         placeholder="Create a password"
-                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0" />
+                        autoComplete="new-password"
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-400" />
                       <button type="button" onClick={() => setShowPassword(!showPassword)}
                         className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0">
                         {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -411,6 +412,7 @@ function OnboardingFlow({ onComplete, onBack }) {
                     </div>
                     <input type={showPassword ? 'text' : 'password'} value={confirmPassword}
                       onChange={e => setConfirmPassword(e.target.value)}
+                      autoComplete="new-password"
                       placeholder="Confirm password" className={inputCls} />
                   </div>
                   <div className="flex items-start gap-3">
@@ -418,7 +420,7 @@ function OnboardingFlow({ onComplete, onBack }) {
                       <p className="text-xs text-gray-500">Use 8 or more characters</p>
                     </div>
                     <button type="submit" disabled={loading || usernameStatus === 'checking'}
-                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
+                      className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                       {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                       {loading ? 'Creating account…' : 'Next'}
                     </button>
@@ -476,7 +478,7 @@ function OnboardingFlow({ onComplete, onBack }) {
                       <p className="mt-1 text-xs text-gray-500">What people pay to send you a Knocc request</p>
                     </div>
                     <button type="submit" disabled={loading}
-                      className="px-6 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0 self-start mt-6">
+                      className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0 self-start mt-6">
                       {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                       {loading ? 'Creating account…' : 'Create account'}
                     </button>
@@ -493,21 +495,22 @@ function OnboardingFlow({ onComplete, onBack }) {
         {/* Branding */}
         <div className="hidden lg:flex flex-1 items-center justify-center">
           <div className="text-center">
-            <h2 className="text-9xl text-blue-600 tracking-tight"
+            <h2 className="text-9xl text-blue-600 tracking-tight leading-none"
               style={{ fontFamily: "'Alice', serif", color: '#0184ff', fontSize: '180px' }}>pmail</h2>
-            <p className="mt-1 text-xl text-gray-600 font-light">Professional email with Knocc</p>
           </div>
         </div>
       </div>
       </div>
 
       {/* Footer - pinned to bottom left */}
-      <div className="text-left pb-2">
+      <div className="absolute bottom-4 right-8 text-right">
+        <p className="text-sm text-gray-500 font-light leading-none">Professional email with Knocc — An inbox for people worth reaching.</p>
         <p className="text-xs text-gray-400">
-          By continuing, you agree to Pmail's{' '}
+          By continuing, you agree to pmail's{' '}
           <button type="button" onClick={() => setShowTerms(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Terms of Service</button>
           {' & '}
           <button type="button" onClick={() => setShowPrivacy(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Privacy Policy</button>
+          {' · by pryro:148431003'}
         </p>
       </div>
       </>)}

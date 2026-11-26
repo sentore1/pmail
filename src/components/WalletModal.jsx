@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react'
-import { X, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft, AlertCircle } from 'lucide-react'
+import { X, Plus, CreditCard, DollarSign, ArrowUpRight, ArrowDownRight, Clock, Zap, Copy, CheckCircle, ArrowLeft, AlertCircle, Smartphone } from 'lucide-react'
 import { walletAPI } from '../services/api'
 import { loadStripe } from '@stripe/stripe-js'
 
@@ -28,6 +28,9 @@ function WalletModal({ onClose, user }) {
     cvc: '',
     name: ''
   })
+  const [momoPhone, setMomoPhone] = useState('')
+  const [momoReference, setMomoReference] = useState(null)
+  const [checkingMomo, setCheckingMomo] = useState(false)
   const mountedRef = useRef(true)
 
   useEffect(() => {
@@ -41,6 +44,30 @@ function WalletModal({ onClose, user }) {
 
   useEffect(() => {
     let interval
+    if (momoReference && checkingMomo) {
+      interval = setInterval(async () => {
+        try {
+          const res = await walletAPI.checkMomoPayment(momoReference)
+          if (res.status === 'SUCCESSFUL') {
+            setSuccess(`Payment successful! $${res.depositAmount?.toFixed(2)} added to your wallet.`)
+            setBalance(res.walletBalance)
+            setMomoReference(null)
+            setCheckingMomo(false)
+            await loadWalletData()
+            setTimeout(() => { setActiveTab('overview'); setSuccess('') }, 2500)
+          } else if (res.status === 'FAILED') {
+            setError('MoMo payment failed. Please try again.')
+            setMomoReference(null)
+            setCheckingMomo(false)
+          }
+        } catch (err) { console.error('MoMo poll error:', err) }
+      }, 4000)
+    }
+    return () => clearInterval(interval)
+  }, [momoReference, checkingMomo])
+
+  useEffect(() => {
+    let interval
     if (lightningInvoice && checkingInvoice) {
       interval = setInterval(async () => {
         try {
@@ -51,10 +78,7 @@ function WalletModal({ onClose, user }) {
             setLightningInvoice(null)
             setCheckingInvoice(false)
             await loadWalletData()
-            setTimeout(() => {
-              setActiveTab('overview')
-              setSuccess('')
-            }, 2000)
+            setTimeout(() => { setActiveTab('overview'); setSuccess('') }, 2000)
           }
         } catch (err) {
           console.error('Failed to check invoice status:', err)
@@ -78,6 +102,20 @@ function WalletModal({ onClose, user }) {
       console.error('Failed to load wallet data:', err)
       setError('Failed to load wallet data')
     }
+  }
+
+  const handleMomoPayment = async () => {
+    if (!amount || parseFloat(amount) < 1) return setError('Amount must be at least $1')
+    if (!momoPhone.trim()) return setError('Enter your MoMo phone number')
+    setLoading(true); setError('')
+    try {
+      const res = await walletAPI.initiateMomoPayment(parseFloat(amount), momoPhone.trim())
+      setMomoReference(res.referenceId)
+      setCheckingMomo(true)
+      setSuccess(`Payment request sent to ${momoPhone}. Approve it on your phone.`)
+    } catch (err) {
+      setError(err.message || 'Failed to initiate MoMo payment')
+    } finally { setLoading(false) }
   }
 
   const handleAddFundsCard = async () => {
@@ -246,6 +284,7 @@ function WalletModal({ onClose, user }) {
   const formatTransactionType = (type) => {
     switch (type) {
       case 'DEPOSIT': return 'Funds Added'
+      case 'DEPOSIT_PENDING': return 'Deposit Pending'
       case 'KNOCC_SENT': return 'Knocc Request Sent'
       case 'KNOCC_RECEIVED': return 'Knocc Request Received'
       case 'REFUND': return 'Refund'
@@ -422,6 +461,16 @@ function WalletModal({ onClose, user }) {
                     <label className="block text-sm font-medium text-gray-700 mb-3">Choose Payment Method</label>
                     <div className="grid grid-cols-2 gap-3">
                       <button
+                        onClick={() => setPaymentMethod('momo')}
+                        className={`p-4 border-2 rounded-lg transition-all ${
+                          paymentMethod === 'momo' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
+                        }`}
+                      >
+                        <Smartphone className={`w-6 h-6 mx-auto mb-2 ${paymentMethod === 'momo' ? 'text-blue-600' : 'text-gray-400'}`} />
+                        <p className="text-sm font-medium text-gray-900">MoMo</p>
+                        <p className="text-xs text-gray-500 mt-1">MTN Mobile Money</p>
+                      </button>
+                      <button
                         onClick={() => setPaymentMethod('card')}
                         className={`p-4 border-2 rounded-lg transition-all ${
                           paymentMethod === 'card' ? 'border-blue-600 bg-blue-50' : 'border-gray-200 hover:border-gray-300'
@@ -471,6 +520,33 @@ function WalletModal({ onClose, user }) {
                       </button>
                     ))}
                   </div>
+
+                  {/* MoMo Form */}
+                  {paymentMethod === 'momo' && (
+                    <div className="mb-4 space-y-3 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Smartphone className="w-5 h-5 text-yellow-600" />
+                        <h4 className="text-sm font-medium text-yellow-900">MTN Mobile Money</h4>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">MoMo Phone Number</label>
+                        <input
+                          type="tel"
+                          value={momoPhone}
+                          onChange={(e) => setMomoPhone(e.target.value)}
+                          placeholder="e.g. 237XXXXXXXXX"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-yellow-500 text-sm"
+                        />
+                        <p className="text-xs text-gray-500 mt-1">Include country code (e.g. 237 for Cameroon)</p>
+                      </div>
+                      {amount && parseFloat(amount) > 0 && (
+                        <div className="text-xs text-yellow-800 bg-yellow-100 p-2 rounded">
+                          You will be charged: <strong>${(parseFloat(amount) * (1 + (parseFloat(import.meta.env.VITE_TRANSACTION_FEE_PERCENTAGE || 5) / 100))).toFixed(2)}</strong>
+                          {' '}(includes {import.meta.env.VITE_TRANSACTION_FEE_PERCENTAGE || 5}% fee)
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Card Details Form - Only show for card payment */}
                   {paymentMethod === 'card' && (
@@ -557,14 +633,23 @@ function WalletModal({ onClose, user }) {
                   )}
 
                   <button
-                    onClick={paymentMethod === 'card' ? handleAddFundsCard : handleCreateLightningInvoice}
-                    disabled={!amount || parseFloat(amount) < 1 || loading}
+                    onClick={
+                      paymentMethod === 'card' ? handleAddFundsCard
+                      : paymentMethod === 'momo' ? handleMomoPayment
+                      : handleCreateLightningInvoice
+                    }
+                    disabled={!amount || parseFloat(amount) < 1 || loading || (paymentMethod === 'momo' && checkingMomo)}
                     className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed text-white py-3 px-4 rounded-md transition-colors font-medium flex items-center justify-center gap-2"
                   >
                     {loading ? (
                       <>
                         <Clock className="w-4 h-4 animate-spin" />
                         {stripeProcessing ? 'Processing Payment...' : 'Processing...'}
+                      </>
+                    ) : paymentMethod === 'momo' ? (
+                      <>
+                        <Smartphone className="w-4 h-4" />
+                        {checkingMomo ? 'Waiting for approval...' : `Pay $${amount || '0.00'} with MoMo`}
                       </>
                     ) : paymentMethod === 'card' ? (
                       <>

@@ -363,6 +363,23 @@ export const walletAPI = {
     });
     return handleResponse(response);
   },
+
+  // MoMo (MTN Mobile Money)
+  initiateMomoPayment: async (amount, phoneNumber) => {
+    const response = await fetch(`${API_URL}/wallet/momo/initiate`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+      body: JSON.stringify({ amount, phoneNumber }),
+    });
+    return handleResponse(response);
+  },
+
+  checkMomoPayment: async (referenceId) => {
+    const response = await fetch(`${API_URL}/wallet/momo/status/${referenceId}`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
 };
 
 // Invitation API
@@ -503,6 +520,79 @@ export const payToReplyAPI = {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ replyBody, senderName }),
+    });
+    return handleResponse(response);
+  },
+};
+
+// ─── Inbound Email API ────────────────────────────────────────────────────────
+// PUBLIC routes (no auth) are used by external senders.
+// AUTHENTICATED routes are used by the Pryro recipient.
+export const inboundAPI = {
+  // ── External sender (PUBLIC) ──────────────────────────────────────────────
+
+  // Submit a message to a Pryro user (may trigger a payment link)
+  submit: async ({ recipientEmail, externalEmail, externalName, subject, body }) => {
+    const response = await fetch(`${API_URL}/inbound/submit`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ recipientEmail, externalEmail, externalName, subject, body }),
+    });
+    return handleResponse(response);
+  },
+
+  // Get InboundRequest info by pay-token (shows fee, recipient name, status)
+  getRequest: async (token) => {
+    const response = await fetch(`${API_URL}/inbound/p/${token}`, {
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse(response);
+  },
+
+  // Create a Stripe PaymentIntent for the inbound fee
+  createPayment: async (token) => {
+    const response = await fetch(`${API_URL}/inbound/p/${token}/create-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+    });
+    return handleResponse(response);
+  },
+
+  // Confirm Stripe payment — delivers email to recipient's inbox
+  confirmPayment: async (token, paymentIntentId) => {
+    const response = await fetch(`${API_URL}/inbound/p/${token}/confirm-payment`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ paymentIntentId }),
+    });
+    return handleResponse(response);
+  },
+
+  // ── Pryro recipient (AUTHENTICATED) ──────────────────────────────────────
+
+  // List all inbound requests for the logged-in user
+  listRequests: async (status = null) => {
+    const url = status
+      ? `${API_URL}/inbound?status=${encodeURIComponent(status)}`
+      : `${API_URL}/inbound`;
+    const response = await fetch(url, { headers: getAuthHeaders() });
+    return handleResponse(response);
+  },
+
+  // Accept an inbound message (keeps it, opens conversation)
+  accept: async (id) => {
+    const response = await fetch(`${API_URL}/inbound/${id}/accept`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
+  // Decline an inbound message (removes from inbox, refunds sender)
+  decline: async (id) => {
+    const response = await fetch(`${API_URL}/inbound/${id}/decline`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
     });
     return handleResponse(response);
   },
