@@ -73,6 +73,7 @@ model User {
 
   // Password reset tokens
   passwordResetTokens    PasswordResetToken[]
+  platformEarnings       PlatformEarning[]
 
   @@index([email])
 }
@@ -304,7 +305,7 @@ model Transaction {
   userId      String
   user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   
-  type        String // DEPOSIT, KNOCC_SENT, KNOCC_RECEIVED, REFUND
+  type        String // DEPOSIT, DEPOSIT_PENDING, KNOCC_SENT, KNOCC_RECEIVED, REFUND, WITHDRAWAL
   amount      Float
   description String
   
@@ -312,6 +313,22 @@ model Transaction {
 
   @@index([userId])
   @@index([createdAt])
+}
+
+// Platform fee earned on every deposit — admin revenue tracking
+model PlatformEarning {
+  id            String   @id @default(uuid())
+  userId        String
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  feeAmount     Float
+  depositAmount Float
+  source        String   // MOMO, STRIPE, LIGHTNING
+  referenceId   String
+  createdAt     DateTime @default(now())
+
+  @@index([source])
+  @@index([createdAt])
+  @@index([userId])
 }
 
 model PasswordResetToken {

@@ -158,20 +158,24 @@ export const checkMomoPayment = async (req, res) => {
     const depositAmount = parseFloat(parts[2]) || parseFloat(data.amount);
     const feeAmount = parseFloat(parts[3]) || 0;
 
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { walletBalance: { increment: depositAmount } },
-      select: { walletBalance: true },
-    });
-
-    await prisma.transaction.create({
-      data: {
-        userId,
-        type: 'DEPOSIT',
-        amount: depositAmount,
-        description: `MoMo confirmed:${referenceId} deposit:$${depositAmount} fee:$${feeAmount} mtn:${data.financialTransactionId || ''}`,
-      },
-    });
+    const [user] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { walletBalance: { increment: depositAmount } },
+        select: { walletBalance: true },
+      }),
+      prisma.transaction.create({
+        data: {
+          userId,
+          type: 'DEPOSIT',
+          amount: depositAmount,
+          description: `MoMo confirmed:${referenceId} deposit:$${depositAmount} fee:$${feeAmount} mtn:${data.financialTransactionId || ''}`,
+        },
+      }),
+      prisma.platformEarning.create({
+        data: { userId, feeAmount, depositAmount, source: 'MOMO', referenceId },
+      }),
+    ]);
 
     res.json({ status: 'SUCCESSFUL', walletBalance: user.walletBalance, depositAmount, feeAmount });
   } catch (err) {
@@ -202,19 +206,23 @@ export const momoWebhook = async (req, res) => {
     const depositAmount = parseFloat(parts[2]) || parseFloat(amount) || 0;
     const feeAmount = parseFloat(parts[3]) || 0;
 
-    await prisma.user.update({
-      where: { id: pending.userId },
-      data: { walletBalance: { increment: depositAmount } },
-    });
-
-    await prisma.transaction.create({
-      data: {
-        userId: pending.userId,
-        type: 'DEPOSIT',
-        amount: depositAmount,
-        description: `MoMo confirmed:${externalId} deposit:$${depositAmount} fee:$${feeAmount} mtn:${financialTransactionId || ''}`,
-      },
-    });
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: pending.userId },
+        data: { walletBalance: { increment: depositAmount } },
+      }),
+      prisma.transaction.create({
+        data: {
+          userId: pending.userId,
+          type: 'DEPOSIT',
+          amount: depositAmount,
+          description: `MoMo confirmed:${externalId} deposit:$${depositAmount} fee:$${feeAmount} mtn:${financialTransactionId || ''}`,
+        },
+      }),
+      prisma.platformEarning.create({
+        data: { userId: pending.userId, feeAmount, depositAmount, source: 'MOMO', referenceId: externalId },
+      }),
+    ]);
 
     res.sendStatus(200);
   } catch (err) {
@@ -359,22 +367,24 @@ export const confirmStripePayment = async (req, res) => {
     const feeAmount = parseFloat(paymentIntent.metadata.feeAmount);
     const feePercentage = parseFloat(paymentIntent.metadata.feePercentage);
 
-    // Credit user wallet with deposit amount (fee goes to company)
-    const user = await prisma.user.update({
-      where: { id: userId },
-      data: { walletBalance: { increment: depositAmount } },
-      select: { walletBalance: true },
-    });
-
-    // Record transaction
-    await prisma.transaction.create({
-      data: {
-        userId,
-        type: 'DEPOSIT',
-        amount: depositAmount,
-        description: `Stripe deposit: $${depositAmount.toFixed(2)} (Fee: $${feeAmount.toFixed(2)}, ${feePercentage}%) - ${paymentIntentId}`,
-      },
-    });
+    const [user] = await prisma.$transaction([
+      prisma.user.update({
+        where: { id: userId },
+        data: { walletBalance: { increment: depositAmount } },
+        select: { walletBalance: true },
+      }),
+      prisma.transaction.create({
+        data: {
+          userId,
+          type: 'DEPOSIT',
+          amount: depositAmount,
+          description: `Stripe deposit: $${depositAmount.toFixed(2)} (Fee: $${feeAmount.toFixed(2)}, ${feePercentage}%) - ${paymentIntentId}`,
+        },
+      }),
+      prisma.platformEarning.create({
+        data: { userId, feeAmount, depositAmount, source: 'STRIPE', referenceId: paymentIntentId },
+      }),
+    ]);
 
     res.json({
       message: 'Funds added successfully',

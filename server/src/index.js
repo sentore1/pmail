@@ -10,6 +10,7 @@ import invitationRoutes from './routes/invitations.js';
 import googleRoutes from './routes/google.js';
 import intelligenceRoutes from './routes/intelligence.js';
 import payToReplyRoutes from './routes/payToReply.js';
+import adminRoutes from './routes/admin.js';
 import inboundRoutes from './routes/inbound.js';
 import { startInboundSmtpServer } from './services/inboundSmtpServer.js';
 
@@ -36,6 +37,7 @@ app.use('/api/invitations', invitationRoutes);
 app.use('/api/google', googleRoutes);
 app.use('/api/intelligence', intelligenceRoutes);
 app.use('/api/pay-to-reply', payToReplyRoutes);
+app.use('/api/admin', adminRoutes);
 app.use('/api/inbound', inboundRoutes);
 
 // Health check
