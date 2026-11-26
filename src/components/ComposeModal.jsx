@@ -476,9 +476,11 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft, 
     if (!bodyHTML?.trim()) { setError('Please enter a message'); return }
 
     // Check if any recipient requires Knocc payment
-    // (skip Knocc when pay-to-reply is enabled — external addresses are sent via SMTP)
-    const unapprovedRecipients = finalRecipients.filter(r => !r.approved && r.email.includes('@'))
-    if (unapprovedRecipients.length > 0 && !payToReplyEnabled) {
+    // Knocc only applies to REGISTERED Pryro users who aren't an approved contact
+    // (they have an `id` from search/contacts). Hand-typed external addresses
+    // (Gmail etc.) have no id — they're sent via SMTP and must NEVER trigger Knocc.
+    const unapprovedRecipients = finalRecipients.filter(r => r.id && !r.approved)
+    if (unapprovedRecipients.length > 0) {
       setSelectedContact(unapprovedRecipients[0])
       setShowKnoccPayment(true)
       return
