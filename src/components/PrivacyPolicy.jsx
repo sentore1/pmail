@@ -53,7 +53,7 @@ function PrivacyPolicy({ onBack }) {
 
           <section>
             <h2 className="text-base font-medium text-gray-800 mb-2">7. Your Rights</h2>
-            <p>Depending on your location, you may have the right to access, correct, delete, or export your personal data, and to object to or restrict its processing. To exercise any of these rights, contact us at <a href="mailto:privacy@pmail.com" className="text-gray-800 underline underline-offset-2">privacy@pmail.com</a>.</p>
+            <p>Depending on your location, you may have the right to access, correct, delete, or export your personal data, and to object to or restrict its processing. To exercise any of these rights, contact us at <a href="mailto:privacy@pryro.com" className="text-gray-800 underline underline-offset-2">privacy@pryro.com</a>.</p>
           </section>
 
           <section>
@@ -78,7 +78,7 @@ function PrivacyPolicy({ onBack }) {
 
           <section>
             <h2 className="text-base font-medium text-gray-800 mb-2">12. Contact</h2>
-            <p>Questions about this Privacy Policy? Email us at <a href="mailto:privacy@pmail.com" className="text-gray-800 underline underline-offset-2">privacy@pmail.com</a>.</p>
+            <p>Questions about this Privacy Policy? Email us at <a href="mailto:privacy@pryro.com" className="text-gray-800 underline underline-offset-2">privacy@pryro.com</a>.</p>
           </section>
 
         </div>

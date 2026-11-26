@@ -510,7 +510,7 @@ function OnboardingFlow({ onComplete, onBack }) {
           <button type="button" onClick={() => setShowTerms(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Terms of Service</button>
           {' & '}
           <button type="button" onClick={() => setShowPrivacy(true)} className="text-gray-400 hover:text-gray-600 underline underline-offset-2">Privacy Policy</button>
-          {' · by pryro:148431003'}
+          {' · by pryro.com | TIN:148431003'}
         </p>
       </div>
       </>)}
