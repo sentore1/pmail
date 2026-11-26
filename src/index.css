@@ -15,7 +15,7 @@ body {
   box-sizing: border-box;
 }
 
-/* Hide browser native password reveal button (Edge/Chrome on Windows) */
+/* Hide browser bative password reveal button (Edge/Chrome on Windows) */
 input[type="password"]::-ms-reveal,
 input[type="password"]::-ms-clear {
   display: none;
