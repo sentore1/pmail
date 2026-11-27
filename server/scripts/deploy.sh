@@ -23,7 +23,7 @@ git reset --hard origin/main
 # --- Frontend build ---
 log "Installing frontend dependencies"
 rm -rf node_modules
-npm install --no-audit --no-fund
+npm install --no-audit --no-fund --include=dev
 
 log "Building frontend"
 ./node_modules/.bin/vite build
