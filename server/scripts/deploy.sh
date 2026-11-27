@@ -22,6 +22,7 @@ git reset --hard origin/main
 
 # --- Frontend build ---
 log "Installing frontend dependencies"
+rm -rf node_modules
 npm install --no-audit --no-fund
 
 log "Building frontend"
