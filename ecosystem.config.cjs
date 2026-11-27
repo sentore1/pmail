@@ -37,7 +37,9 @@ module.exports = {
       interpreter: 'node',
       env: {
         NODE_ENV: 'production',
-        // WEBHOOK_SECRET and WEBHOOK_PORT are read from server/.env by webhook.js
+        // webhook.js reads WEBHOOK_SECRET/WEBHOOK_PORT/DEPLOY_BRANCH from server/.env
+        // but we also set WEBHOOK_PORT here so PM2 restarts never fall back to 9000
+        WEBHOOK_PORT: '9002',
       },
       autorestart: true,
       watch: false,
