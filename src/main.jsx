@@ -8,7 +8,7 @@ import './index.css'
 
 const params = new URLSearchParams(window.location.search)
 
-// ?reply=<token>   — external user paying to reply to an outbound email
+// ?reply=<token>   — edxternal user paying to reply to an outbound email
 const replyToken = params.get('reply')
 
 // ?inbound=<token> — external sender paying the inbound delivery fee
