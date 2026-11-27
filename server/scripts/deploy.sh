@@ -25,7 +25,7 @@ log "Installing frontend dependencies"
 npm install --no-audit --no-fund
 
 log "Building frontend"
-npm run build
+./node_modules/.bin/vite build
 
 # --- Backend ---
 log "Installing backend dependencies"
