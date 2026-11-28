@@ -61,10 +61,23 @@ const pollUser = async (user) => {
       }
 
       // Check if already imported (avoid duplicates via message-id)
-      const messageId = parsed.messageId;
+      const messageId = parsed.messageId || null;
       if (messageId) {
         const exists = await prisma.email.findFirst({
           where: { externalMessageId: messageId },
+        });
+        if (exists) {
+          await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
+          continue;
+        }
+      } else {
+        // No Message-ID — deduplicate by sender + subject + approximate time
+        const exists = await prisma.email.findFirst({
+          where: {
+            externalSenderEmail: fromAddress,
+            subject,
+            sentAt: { gte: new Date(Date.now() - 60 * 1000) },
+          },
         });
         if (exists) {
           await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
@@ -98,7 +111,7 @@ const pollUser = async (user) => {
 
     await client.logout();
   } catch (err) {
-    console.error(`[imapPoller] Error polling ${user.email}:`, err.message);
+    console.error(`[imapPoller] Error polling ${user.email}:`, err.message, err.stack);
     try { await client.logout(); } catch {}
   }
 };
