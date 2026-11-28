@@ -30,7 +30,7 @@ const pollUser = async (user) => {
     logger: false,
     tls: { rejectUnauthorized: false },
     greetingTimeout: 60000,
-    socketTimeout: 120000,
+    socketTimeout: 0,
   });
 
   try {
