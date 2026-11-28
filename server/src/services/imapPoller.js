@@ -27,7 +27,12 @@ const pollUser = async (user) => {
     port: IMAP_PORT,
     secure: IMAP_SECURE,
     auth: { user: user.email, pass: password },
-    logger: false,
+    logger: {
+      debug: () => {},
+      info: (obj) => console.log('[imap]', obj.msg),
+      warn: (obj) => console.log('[imap warn]', obj.msg),
+      error: (obj) => console.log('[imap error]', obj.msg),
+    },
     tls: { rejectUnauthorized: false },
     greetingTimeout: 60000,
     socketTimeout: 120000,
