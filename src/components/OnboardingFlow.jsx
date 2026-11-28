@@ -263,7 +263,7 @@ function OnboardingFlow({ onComplete, onBack }) {
 
     if (step === 3) {
       if (!password) { setError('Please create a password'); return }
-      if (password.length < 12) { setError('Password must be at least 12 characters'); return }
+      if (password.length < 7) { setError('Password must be at least 7 characters'); return }
       
       // Check for uppercase
       if (!/[A-Z]/.test(password)) { setError('Password must include at least one uppercase letter'); return }
