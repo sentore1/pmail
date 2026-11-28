@@ -512,7 +512,13 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft, 
         try { await emailAPI.deleteDraft(draftId) } catch (_) {}
       }
 
-      onClose()
+      // If some recipients were external (not on Pmail), show a brief notice
+      if (res.externalRecipients?.length > 0) {
+        setError(`✓ Sent! (delivered to external address${res.externalRecipients.length > 1 ? 'es' : ''}: ${res.externalRecipients.join(', ')})`)
+        setTimeout(() => onClose(), 2500)
+      } else {
+        onClose()
+      }
     } catch (err) {
       setError(err.message || 'Failed to send email')
     } finally {
@@ -1076,7 +1082,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft, 
         <div className="flex flex-col flex-1 overflow-hidden">
           <div className="flex-1 overflow-y-auto" style={{ scrollbarWidth: 'thin' }}>
             {error && (
-              <div className="mx-4 mt-4 mb-2 text-sm text-red-600">
+              <div className={`mx-4 mt-4 mb-2 text-sm ${error.startsWith('✓') ? 'text-green-600' : 'text-red-600'}`}>
                 {error}
               </div>
             )}

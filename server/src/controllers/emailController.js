@@ -445,6 +445,7 @@ export const getSentEmails = async (req, res) => {
         },
         attachments: { select: { id: true, filename: true, mimeType: true, size: true } },
         stars: { where: { userId }, select: { id: true } },
+        payToReplyInvitations: { select: { externalEmail: true } },
       },
       orderBy: { sentAt: 'desc' },
     });
@@ -453,6 +454,8 @@ export const getSentEmails = async (req, res) => {
       ...e,
       isStarred: e.stars?.length > 0,
       stars: undefined,
+      externalRecipients: e.payToReplyInvitations?.map((i) => i.externalEmail) || [],
+      payToReplyInvitations: undefined,
     }));
 
     res.json({ emails: shaped });

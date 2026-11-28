@@ -362,8 +362,9 @@ function EmailList({
                   const active = isActive(thread)
                   const isSent = effectiveView === 'sent'
                   const firstRecipient = thread.recipients?.find((r) => r.type === 'TO')?.recipient
+                  const externalEmail = thread.externalRecipients?.[0]
                   const displayName = isSent
-                    ? firstRecipient?.name || firstRecipient?.email || 'Unknown'
+                    ? firstRecipient?.name || firstRecipient?.email || externalEmail || 'Unknown'
                     : thread.sender?.name ||
                       (typeof thread.sender === 'string' ? thread.sender : null) ||
                       'Unknown'

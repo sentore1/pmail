@@ -115,14 +115,14 @@ const buildOutboundHtml = ({ senderName, subject, body, replyUrl, replyFee }) =>
 export const sendExternalEmail = async ({ to, senderName, senderUsername, senderPassword, subject, body, replyUrl, replyFee }) => {
   const transport = await getTransporter();
 
-  const fromEmail = process.env.MAILCOW_SMTP_USER || process.env.SMTP_FROM_EMAIL || 'noreply@pryro.com';
+  const mailDomain = process.env.MAIL_DOMAIN || 'pryro.com';
   const senderPryroEmail = senderUsername
-    ? `${senderUsername.toLowerCase()}@${process.env.MAIL_DOMAIN || 'pryro.com'}`
-    : fromEmail;
+    ? `${senderUsername.toLowerCase()}@${mailDomain}`
+    : (process.env.MAILCOW_SMTP_USER || process.env.SMTP_FROM_EMAIL || `noreply@${mailDomain}`);
   const fromName = senderName || process.env.SMTP_FROM_NAME || 'Pmail';
 
   const info = await transport.sendMail({
-    from: `"${fromName}" <${fromEmail}>`,
+    from: `"${fromName}" <${senderPryroEmail}>`,
     replyTo: `"${fromName}" <${senderPryroEmail}>`,
     to,
     subject,
