@@ -23,6 +23,7 @@ export const getTransporter = async () => {
       port: parseInt(MAILCOW_SMTP_PORT || '587', 10),
       secure: MAILCOW_SMTP_SECURE === 'true',
       auth: { user: MAILCOW_SMTP_USER, pass: MAILCOW_SMTP_PASS },
+      tls: { rejectUnauthorized: false },
     });
     console.log(`📧 Mailcow SMTP transport configured for ${MAILCOW_SMTP_HOST}`);
   } else if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
