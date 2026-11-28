@@ -8,6 +8,7 @@ const api = () => axios.create({
   baseURL: `${MAILCOW_URL}/api/v1`,
   headers: { 'X-API-Key': MAILCOW_KEY, 'Content-Type': 'application/json' },
   timeout: 10000,
+  httpsAgent: new (await import('https')).Agent({ rejectUnauthorized: false }),
 });
 
 /**
