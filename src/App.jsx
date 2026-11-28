@@ -9,7 +9,6 @@ import SettingsModal from './components/SettingsModal'
 import WalletModal from './components/WalletModal'
 import LoginPage from './components/LoginPage'
 import InviteFriendsModal from './components/InviteFriendsModal'
-import BentoDashboard from './components/BentoDashboard'
 import { authAPI, emailAPI, knoccAPI, userAPI } from './services/api'
 
 function App() {
@@ -33,7 +32,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showWallet, setShowWallet] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
-  const [currentView, setCurrentView] = useState('dashboard')
+  const [currentView, setCurrentView] = useState('inbox')
   const [inboxView, setInboxView] = useState('inbox')
   const [knoccFilter, setKnoccFilter] = useState('all')
   const [globalSearch, setGlobalSearch] = useState('')
@@ -197,9 +196,8 @@ function App() {
           setSelectedEmail(null)
         }}
         onShowInbox={() => {
-          setCurrentView('dashboard')
+          setCurrentView('inbox')
           setInboxView('inbox')
-          setSelectedEmail(null)
         }}
         onShowSettings={() => setShowSettings(true)}
         onShowWallet={() => setShowWallet(true)}
@@ -230,19 +228,7 @@ function App() {
 
         {/* Email list + detail */}
         <div className="flex flex-1 overflow-hidden">
-          {currentView === 'dashboard' && (
-            <BentoDashboard
-              user={user}
-              emails={emails}
-              requests={requests}
-              onCompose={() => setShowCompose(true)}
-              onNavigate={(view) => { setCurrentView(view); setSelectedEmail(null) }}
-              onShowKnoccRequests={() => { setCurrentView('knocc-requests'); setInboxView('all'); setSelectedEmail(null) }}
-              onShowWallet={() => setShowWallet(true)}
-              onSelectEmail={(email) => { setCurrentView('inbox'); setInboxView('inbox'); setSelectedEmail(email) }}
-            />
-          )}
-          {currentView !== 'dashboard' && <EmailList
+          <EmailList
             emails={getDisplayEmails()}
             selectedEmail={selectedEmail}
             onSelectEmail={(email) => {
@@ -278,9 +264,9 @@ function App() {
             onDeleteEmails={handleDeleteEmails}
             onRefresh={handleRefresh}
             searchQuery={globalSearch}
-          />}
+          />
 
-          {currentView !== 'dashboard' && <EmailDetail
+          <EmailDetail
             email={selectedEmail}
             viewType={currentView}
             onClose={() => setSelectedEmail(null)}
@@ -311,7 +297,7 @@ function App() {
               setComposeReplyTo(null)
               setShowCompose(true)
             }}
-          />}
+          />
         </div>
       </div>
 

@@ -21,7 +21,7 @@ function Sidebar({
 
   const navBtn = (view, icon, label, badge, onClick) => {
     const Icon = icon
-    const active = currentView === view || (view === 'inbox' && currentView === 'dashboard')
+    const active = currentView === view
     return (
       <button
         onClick={onClick || (() => onNavigate(view))}
