@@ -37,9 +37,14 @@ const pollUser = async (user) => {
     await client.connect();
     await client.mailboxOpen('INBOX');
 
-    // Fetch all unseen messages
-    for await (const msg of client.fetch('1:*', { envelope: true, source: true, flags: true })) {
-      if (msg.flags.has('\\Seen')) continue;
+    // Only fetch unseen messages
+    const uids = await client.search({ unseen: true });
+    if (!uids || uids.length === 0) {
+      await client.logout();
+      return;
+    }
+
+    for await (const msg of client.fetch(uids, { envelope: true, source: true, flags: true }, { uid: true })) {
 
       const parsed = await simpleParser(msg.source);
       const fromAddress = parsed.from?.value?.[0]?.address;
@@ -51,7 +56,7 @@ const pollUser = async (user) => {
 
       // Skip emails sent by this user themselves (already in Pmail as sent)
       if (fromAddress.toLowerCase() === user.email.toLowerCase()) {
-        await client.messageFlagsAdd(msg.seq, ['\\Seen']);
+        await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
         continue;
       }
 
@@ -62,7 +67,7 @@ const pollUser = async (user) => {
           where: { externalMessageId: messageId },
         });
         if (exists) {
-          await client.messageFlagsAdd(msg.seq, ['\\Seen']);
+          await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
           continue;
         }
       }
@@ -88,9 +93,7 @@ const pollUser = async (user) => {
       });
 
       console.log(`📥 Imported email for ${user.email} from ${fromAddress}: "${subject}"`);
-
-      // Mark as seen in IMAP so we don't import it again
-      await client.messageFlagsAdd(msg.seq, ['\\Seen']);
+      await client.messageFlagsAdd({ uid: msg.uid }, ['\\Seen'], { uid: true });
     }
 
     await client.logout();
