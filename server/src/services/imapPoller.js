@@ -4,7 +4,7 @@ import prisma from '../utils/prisma.js';
 import { decryptSmtpPassword } from './emailService.js';
 
 const IMAP_HOST   = process.env.MAILCOW_IMAP_HOST || process.env.MAILCOW_SMTP_HOST || 'mail.pryro.com';
-const IMAP_PORT   = parseInt(process.env.MAILCOW_IMAP_PORT || '993', 10);
+const IMAP_PORT   = parseInt(process.env.MAILCOW_IMAP_PORT || '143', 10);
 const IMAP_SECURE = IMAP_PORT === 993;
 const MAIL_DOMAIN = process.env.MAIL_DOMAIN || 'pryro.com';
 const POLL_MS     = parseInt(process.env.IMAP_POLL_MS || '30000', 10);
