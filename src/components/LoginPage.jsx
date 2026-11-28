@@ -405,6 +405,8 @@ function LoginPage({ onLogin }) {
           <h2 className="text-2xl font-normal text-gray-900 mb-2">
             {isLogin ? 'Sign in' : 'Create your pmail Account'}
           </h2>
+          {/* deploy-test: remove this line after confirming auto-deploy works */}
+          <p className="text-xs text-gray-400 mb-1">v{new Date('2026-11-28').toISOString().slice(0,10)}</p>
           
           {step === 1 && (
             <p className="text-sm text-gray-600 mb-6">
