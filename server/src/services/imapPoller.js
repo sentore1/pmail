@@ -31,6 +31,7 @@ const pollUser = async (user) => {
     tls: { rejectUnauthorized: false },
     greetingTimeout: 30000,
     socketTimeout: 60000,
+    requireTLS: !IMAP_SECURE,
   });
 
   try {
