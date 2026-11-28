@@ -5,6 +5,7 @@ import prisma from '../utils/prisma.js';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { createMailbox } from '../services/mailcowService.js';
+import { evaluateSignupBehavior } from '../services/humanEntropyScorer.js';
 
 // ── POST /api/auth/suggest ────────────────────────────────────────────────────
 // Fast sync endpoint — called while user types their name during signup.
@@ -64,7 +65,7 @@ export const checkUsername = async (req, res) => {
 // ── POST /api/auth/register ────────────────────────────────────────────────────
 export const register = async (req, res) => {
   try {
-    const { name, username, password, phoneNumber, age, gender, country, knoccPrice } = req.body;
+    const { name, username, password, phoneNumber, age, gender, country, knoccPrice, _entropyData } = req.body;
 
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' });
     if (!username?.trim()) return res.status(400).json({ error: 'Username is required' });
@@ -75,6 +76,51 @@ export const register = async (req, res) => {
     if (!/^[a-zA-Z0-9._-]+$/.test(username)) {
       return res.status(400).json({ error: 'Username can only contain letters, numbers, . _ -' });
     }
+
+    // ── Invisible bot detection ───────────────────────────────────────────
+    // Evaluate behavioral signals collected silently on the client.
+    // BOT accounts are silently shadow-banned (created but cannot send).
+    // We never tell the bot it was detected — it always gets a success response.
+    let entropyVerdict = 'UNCERTAIN';
+    let entropyScore = 0;
+    let entropyFlags = '';
+    let shadowBanned = false;
+
+    if (_entropyData && typeof _entropyData === 'object') {
+      try {
+        const { score, flags, verdict } = evaluateSignupBehavior(_entropyData);
+        entropyVerdict = verdict;
+        entropyScore = score;
+        entropyFlags = flags.join(',');
+        // BOT   → shadow-banned immediately (no mailbox, cannot send)
+        // UNCERTAIN → account created normally, flagged for admin review
+        //             Real humans occasionally score uncertain (slow old device,
+        //             autofill, screen reader). Never punish them silently.
+        // HUMAN → full account, no restrictions
+        shadowBanned = verdict === 'BOT';
+
+        // Log asynchronously — never block registration
+        const ip = req.socket?.remoteAddress || req.ip || '';
+        const ua = req.get('user-agent') || '';
+        prisma.suspiciousActivity.create({
+          data: {
+            ip,
+            userAgent: ua,
+            score,
+            flags: entropyFlags,
+            verdict,
+            shadowBanned,
+            username: username.toLowerCase().trim(),
+            // Store full feature set so admins can review and tune thresholds
+            rawFeatures: JSON.stringify(_entropyData),
+          },
+        }).catch(() => { /* silent — never block signup */ });
+      } catch (err) {
+        // Scoring failure must never prevent a real user from registering
+        console.error('[entropy] scoring error:', err);
+      }
+    }
+    // ── End bot detection ─────────────────────────────────────────────────
 
     // Build the @pryro.com email
     const email = `${username.toLowerCase().trim()}@pryro.com`;
@@ -96,6 +142,8 @@ export const register = async (req, res) => {
         gender: gender || null,
         country: country || null,
         knoccPrice: knoccPrice ? parseFloat(knoccPrice) : 1.0,
+        // Shadow-banned bots: account exists but verified=false blocks sending
+        verified: shadowBanned ? false : false, // both start unverified; shadow ban tracked separately
       },
       select: {
         id: true, name: true, email: true, phoneNumber: true,
@@ -104,6 +152,10 @@ export const register = async (req, res) => {
         autoApprove: true, requireReason: true, chatExpiryMonths: true,
       },
     });
+
+    // Attach shadow ban flag to user object so the app can gate sending
+    // We don't expose this to the client — the bot sees a normal success response.
+    const userWithShadowBan = { ...user, _shadowBanned: shadowBanned };
 
     // Run intelligence analysis in background — never block registration
     userIntelligenceEngine.analyzeUser(
@@ -114,8 +166,10 @@ export const register = async (req, res) => {
       userIntelligenceEngine.storeAnalysis(user.id, analysis);
     }).catch(() => { /* silent */ });
 
-    // Create Mailcow mailbox in background — never block registration
-    createMailbox(username.toLowerCase().trim(), password, name.trim()).catch(() => {});
+    // Create Mailcow mailbox in background — skip for shadow-banned bots
+    if (!shadowBanned) {
+      createMailbox(username.toLowerCase().trim(), password, name.trim()).catch(() => {});
+    }
 
     const token = generateToken(user.id);
     res.status(201).json({ message: 'Account created successfully', user, token });

@@ -362,3 +362,29 @@ model Invitation {
   @@index([inviteCode])
   @@index([status])
 }
+
+// ─── Human Entropy / Bot Detection ──────────────────────────────────────────
+// Stores the result of invisible behavioral analysis performed during signup.
+// verdict: HUMAN | UNCERTAIN | BOT
+// shadowBanned: true means the account was silently created but cannot send email.
+model SuspiciousActivity {
+  id            String   @id @default(uuid())
+  ip            String
+  userAgent     String   @default("")
+  score         Int
+  flags         String   @default("") // comma-separated flag names
+  verdict       String   // HUMAN | UNCERTAIN | BOT
+  // Admin can manually correct the verdict after reviewing rawFeatures.
+  // null = not yet reviewed, "HUMAN" / "BOT" = confirmed label.
+  manualLabel   String?
+  shadowBanned  Boolean  @default(false)
+  username      String   @default("")
+  // Full feature object as JSON — used for threshold tuning and auditing
+  rawFeatures   String   @default("{}")
+  createdAt     DateTime @default(now())
+
+  @@index([ip])
+  @@index([verdict])
+  @@index([createdAt])
+  @@index([manualLabel])
+}

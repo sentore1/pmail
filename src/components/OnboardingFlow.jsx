@@ -3,6 +3,7 @@ import { ArrowLeft, Eye, EyeOff, Loader2, Check, X } from 'lucide-react'
 import { authAPI } from '../services/api'
 import TermsOfService from './TermsOfService'
 import PrivacyPolicy from './PrivacyPolicy'
+import { HumanEntropyTracker } from '../services/humanEntropyTracker'
 
 const API_URL = import.meta.env.VITE_API_URL || 'http://localhost:5000/api'
 
@@ -85,6 +86,16 @@ function OnboardingFlow({ onComplete, onBack }) {
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
   const usernameTimer = useRef(null)
+
+  // ── Invisible bot-detection tracker ───────────────────────────────────────
+  // Attached once on mount, detached on unmount. Completely invisible to users.
+  const entropyTracker = useRef(null)
+  useEffect(() => {
+    const tracker = new HumanEntropyTracker()
+    tracker.attach()
+    entropyTracker.current = tracker
+    return () => tracker.detach()
+  }, [])
 
   // ── Generate username candidates from first + last name ───────────────────
   const buildNameSuggestions = (first, last) => {
@@ -260,6 +271,11 @@ function OnboardingFlow({ onComplete, onBack }) {
     setLoading(true)
     setError('')
     try {
+      // Collect invisible behavioral signals just before submitting
+      const _entropyData = entropyTracker.current
+        ? entropyTracker.current.computeFeatures()
+        : null
+
       const response = await authAPI.register({
         name: `${firstName.trim()} ${lastName.trim()}`,
         username: username.trim(),
@@ -269,6 +285,7 @@ function OnboardingFlow({ onComplete, onBack }) {
         gender: profile.gender || null,
         country: profile.country || null,
         knoccPrice: parseFloat(profile.knoccPrice) || 1,
+        _entropyData,
       })
       if (response.token && response.user) {
         onComplete(response.user, response.token)
@@ -321,6 +338,17 @@ function OnboardingFlow({ onComplete, onBack }) {
             )}
 
             <form onSubmit={handleNext} className="space-y-4">
+
+              {/* Honeypot — invisible to real users, bots fill it automatically */}
+              <input
+                type="text"
+                name="website"
+                tabIndex={-1}
+                autoComplete="off"
+                aria-hidden="true"
+                onChange={() => entropyTracker.current?.markHoneypotFilled()}
+                style={{ position: 'absolute', left: '-9999px', width: '1px', height: '1px', opacity: 0 }}
+              />
 
               {/* Step 1: Name */}
               {step === 1 && (

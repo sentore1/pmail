@@ -1,6 +1,13 @@
 import express from 'express';
 import { authenticate } from '../middleware/auth.js';
-import { getEarnings, getEarningsStats } from '../controllers/adminController.js';
+import {
+  getEarnings,
+  getEarningsStats,
+  getEntropySignups,
+  getEntropyRecord,
+  labelEntropyRecord,
+  getEntropyStats,
+} from '../controllers/adminController.js';
 
 const router = express.Router();
 
@@ -16,7 +23,15 @@ const requireAdmin = (req, res, next) => {
 
 router.use(authenticate, requireAdmin);
 
-router.get('/earnings', getEarnings);
+// Earnings
+router.get('/earnings',       getEarnings);
 router.get('/earnings/stats', getEarningsStats);
+
+// Human Entropy / Bot Detection
+// Stats must come before /:id to avoid route collision
+router.get('/entropy',          getEntropySignups);
+router.get('/entropy/stats',    getEntropyStats);
+router.get('/entropy/:id',      getEntropyRecord);
+router.patch('/entropy/:id/label', labelEntropyRecord);
 
 export default router;
