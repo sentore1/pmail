@@ -28,5 +28,6 @@ Thumbs.db
 dist/
 build/
 
-# Prisma
-prisma/migrations/
+# Prisma — keep migrations, ignore local SQLite files
+prisma/*.db
+prisma/*.db-journal
