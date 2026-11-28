@@ -18,7 +18,7 @@ export const encryptSmtpPassword = (plain) => {
   return iv.toString('hex') + ':' + cipher.update(plain, 'utf8', 'hex') + cipher.final('hex');
 };
 
-const decryptSmtpPassword = (encrypted) => {
+export const decryptSmtpPassword = (encrypted) => {
   const [ivHex, enc] = encrypted.split(':');
   const decipher     = crypto.createDecipheriv(ALGO, ENC_KEY, Buffer.from(ivHex, 'hex'));
   return decipher.update(enc, 'hex', 'utf8') + decipher.final('utf8');

@@ -92,6 +92,7 @@ model Email {
   // External sender info — populated when a non-Pmail user replies via pay-to-reply
   externalSenderEmail String?
   externalSenderName  String?
+  externalMessageId   String?  @unique  // IMAP Message-ID for dedup
 
   // Pay-to-reply settings (set by sender when composing to external addresses)
   payToReplyEnabled Boolean @default(false)

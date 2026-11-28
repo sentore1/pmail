@@ -13,6 +13,7 @@ import payToReplyRoutes from './routes/payToReply.js';
 import adminRoutes from './routes/admin.js';
 import inboundRoutes from './routes/inbound.js';
 import { startInboundSmtpServer } from './services/inboundSmtpServer.js';
+import { startImapPoller } from './services/imapPoller.js';
 
 dotenv.config();
 
@@ -71,6 +72,6 @@ app.use((err, req, res, next) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Pmail server running on http://localhost:${PORT}`);
-  // Start the optional inbound SMTP receiver (disabled unless INBOUND_SMTP_PORT is set)
   startInboundSmtpServer();
+  startImapPoller();
 });
