@@ -29,6 +29,8 @@ const pollUser = async (user) => {
     auth: { user: user.email, pass: password },
     logger: false,
     tls: { rejectUnauthorized: false },
+    socketTimeout: 30000,
+    connectionTimeout: 15000,
   });
 
   try {
