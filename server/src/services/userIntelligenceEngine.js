@@ -414,38 +414,39 @@ class UserIntelligenceEngine {
       isVPN: false, isProxy: false, threatScore: 0,
     };
 
-    // Provider 1: ipapi.co (HTTPS, no key, 1000/day)
+    // Provider 1: ip-api.com (Free, accurate, 45 req/min) - Primary choice for accuracy
     try {
       const url = lookupIp
-        ? `https://ipapi.co/${lookupIp}/json/`
-        : 'https://ipapi.co/json/';
+        ? `http://ip-api.com/json/${lookupIp}?fields=status,country,countryCode,regionName,city,timezone,isp,proxy,hosting`
+        : `http://ip-api.com/json/?fields=status,country,countryCode,regionName,city,timezone,isp,proxy,hosting`;
       const r = await axios.get(url, { timeout: 4000 });
-      if (r.data && !r.data.error && r.data.country_name) {
-        result.country     = r.data.country_name   || null;
-        result.countryCode = r.data.country_code   || null;
-        result.region      = r.data.region         || null;
-        result.city        = r.data.city           || null;
-        result.timezone    = r.data.timezone       || null;
-        result.isp         = r.data.org            || null;
+      if (r.data?.status === 'success') {
+        result.country     = r.data.country      || null;
+        result.countryCode = r.data.countryCode  || null;
+        result.region      = r.data.regionName   || null;
+        result.city        = r.data.city         || null;
+        result.timezone    = r.data.timezone     || null;
+        result.isp         = r.data.isp          || null;
+        result.isProxy     = r.data.proxy        || false;
+        result.isVPN       = r.data.hosting      || false;
       }
     } catch { /* try next */ }
 
-    // Provider 2: ip-api.com fallback (HTTP, free, 45/min)
+    // Provider 2: ipapi.co fallback (HTTPS, no key, 1000/day)
+    // Provider 2: ipapi.co fallback (HTTPS, no key, 1000/day)
     if (!result.country) {
       try {
         const url = lookupIp
-          ? `http://ip-api.com/json/${lookupIp}?fields=status,country,countryCode,regionName,city,timezone,isp,proxy,hosting`
-          : `http://ip-api.com/json/?fields=status,country,countryCode,regionName,city,timezone,isp,proxy,hosting`;
+          ? `https://ipapi.co/${lookupIp}/json/`
+          : 'https://ipapi.co/json/';
         const r = await axios.get(url, { timeout: 4000 });
-        if (r.data?.status === 'success') {
-          result.country     = r.data.country      || null;
-          result.countryCode = r.data.countryCode  || null;
-          result.region      = r.data.regionName   || null;
-          result.city        = r.data.city         || null;
-          result.timezone    = r.data.timezone     || null;
-          result.isp         = r.data.isp          || null;
-          result.isProxy     = r.data.proxy        || false;
-          result.isVPN       = r.data.hosting      || false;
+        if (r.data && !r.data.error && r.data.country_name) {
+          result.country     = r.data.country_name   || null;
+          result.countryCode = r.data.country_code   || null;
+          result.region      = r.data.region         || null;
+          result.city        = r.data.city           || null;
+          result.timezone    = r.data.timezone       || null;
+          result.isp         = r.data.org            || null;
         }
       } catch { /* try next */ }
     }
