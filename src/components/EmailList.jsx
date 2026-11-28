@@ -1,5 +1,5 @@
-import React, { useState, useMemo } from 'react'
-import { RefreshCw, Filter, Clock, Trash2, X } from 'lucide-react'
+import React, { useState, useMemo, useRef, useEffect } from 'react'
+import { RefreshCw, Filter, Clock, Trash2, X, Check } from 'lucide-react'
 
 const threadKey = (subject = '') =>
   subject.replace(/^(re|fwd|fw):\s*/gi, '').trim().toLowerCase()
@@ -116,6 +116,25 @@ function EmailList({
   }
   const clearSelection = () => setSelectedIds(new Set())
 
+  const [showFilterMenu, setShowFilterMenu] = useState(false)
+  const filterBtnRef = useRef(null)
+  const filterMenuRef = useRef(null)
+
+  useEffect(() => {
+    const handler = (e) => {
+      if (!filterBtnRef.current?.contains(e.target) && !filterMenuRef.current?.contains(e.target))
+        setShowFilterMenu(false)
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [])
+
+  const filterOptions = [
+    { value: 'all',    label: 'All',    desc: 'Show all emails' },
+    { value: 'unread', label: 'Unread', desc: 'Only unread emails' },
+    { value: 'read',   label: 'Read',   desc: 'Only read emails' },
+  ]
+
   const getInitials = (name) => {
     if (!name || name === 'Unknown') return '?'
     const parts = name.trim().split(' ')
@@ -186,17 +205,41 @@ function EmailList({
                 )
               })}
             </div>
-            <div className="flex items-center gap-0.5 ml-auto">
+            <div className="flex items-center gap-0.5 ml-auto relative">
               <button onClick={onRefresh} className="p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors" title="Refresh">
                 <RefreshCw className="w-3.5 h-3.5 text-[#707782]" />
               </button>
               <button
-                onClick={() => setReadFilter((f) => f === 'all' ? 'unread' : f === 'unread' ? 'read' : 'all')}
-                className={`p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors ${readFilter !== 'all' ? 'text-[#2563EB]' : ''}`}
-                title={`Filter: ${readFilter}`}
+                ref={filterBtnRef}
+                onClick={() => setShowFilterMenu(v => !v)}
+                className={`p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors ${readFilter !== 'all' ? 'bg-blue-50' : ''}`}
+                title="Filter"
               >
                 <Filter className={`w-3.5 h-3.5 ${readFilter !== 'all' ? 'text-[#2563EB]' : 'text-[#707782]'}`} />
               </button>
+              {showFilterMenu && (
+                <div
+                  ref={filterMenuRef}
+                  className="absolute right-0 top-full mt-1 w-44 bg-white rounded-xl shadow-lg border border-[#E5E7EB] z-50 py-1 overflow-hidden"
+                >
+                  <p className="px-3 py-1.5 text-[10px] font-semibold text-[#707782] uppercase tracking-wider">Filter by</p>
+                  {filterOptions.map(opt => (
+                    <button
+                      key={opt.value}
+                      onClick={() => { setReadFilter(opt.value); setShowFilterMenu(false) }}
+                      className={`w-full flex items-center justify-between px-3 py-2 text-sm transition-colors hover:bg-[#F5F7FA] ${
+                        readFilter === opt.value ? 'text-[#2563EB] font-semibold' : 'text-[#202124]'
+                      }`}
+                    >
+                      <div>
+                        <p className="leading-tight">{opt.label}</p>
+                        <p className="text-[10px] text-[#707782] font-normal">{opt.desc}</p>
+                      </div>
+                      {readFilter === opt.value && <Check className="w-3.5 h-3.5 text-[#2563EB] flex-shrink-0" />}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </>
         ) : (

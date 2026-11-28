@@ -305,7 +305,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
                   </div>
                 </div>
                 {walletBalance !== null && (
-                  <div className={`flex items-center justify-between px-3 py-2 rounded-2xl text-sm ${walletBalance >= selectedPerson.knoccPrice ? 'bg-green-50 text-green-700' : 'bg-red-50 text-red-700'}`}>
+                  <div className={`flex items-center justify-between px-3 py-2 rounded-2xl text-sm ${walletBalance >= selectedPerson.knoccPrice ? 'bg-green-50 text-green-700' : 'bg-yellow-400 text-black'}`}>
                     <span>Your balance: <strong>${walletBalance.toFixed(2)}</strong></span>
                     {walletBalance < selectedPerson.knoccPrice && <span className="text-xs font-medium">Need ${(selectedPerson.knoccPrice - walletBalance).toFixed(2)} more — add funds from Wallet</span>}
                   </div>

@@ -563,6 +563,20 @@ export const getEmailById = async (req, res) => {
 
 // ─── Per-user star ────────────────────────────────────────────────────────────
 
+export const markAsRead = async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.user.id;
+    await prisma.emailRecipient.updateMany({
+      where: { emailId: id, recipientId: userId },
+      data: { isRead: true, readAt: new Date() },
+    });
+    res.json({ message: 'Marked as read' });
+  } catch (error) {
+    res.status(500).json({ error: 'Failed to mark as read' });
+  }
+};
+
 export const starEmail = async (req, res) => {
   try {
     const { id } = req.params;

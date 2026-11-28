@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { Edit3, Inbox, Send, Star, Trash2, MoreHorizontal, Bell, Settings, Users, Shield, Wallet, FileText, LogOut, ChevronDown } from 'lucide-react'
+import { Edit3, Inbox, Send, Star, Trash2, MoreHorizontal, Bell, Settings, Users, Shield, Wallet, FileText, LogOut, ChevronDown, ChevronLeft, ChevronRight } from 'lucide-react'
 
 function Sidebar({
   onCompose,
@@ -17,6 +17,7 @@ function Sidebar({
 }) {
   const [showMore, setShowMore] = useState(false)
   const [showProfileMenu, setShowProfileMenu] = useState(false)
+  const [collapsed, setCollapsed] = useState(false)
 
   const navBtn = (view, icon, label, badge, onClick) => {
     const Icon = icon
@@ -44,7 +45,20 @@ function Sidebar({
   }
 
   return (
-    <div className="w-56 flex flex-col flex-shrink-0 h-full" style={{ background: '#F1F3F6' }}>
+    <div className="relative flex-shrink-0 flex h-full">
+      {/* Toggle tab */}
+      <button
+        onClick={() => setCollapsed(v => !v)}
+        className="absolute -right-3 top-5 z-50 w-6 h-6 bg-white border border-[#E5E7EB] rounded-full shadow-md flex items-center justify-center hover:bg-[#F5F7FA] transition-colors"
+        title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+      >
+        {collapsed ? <ChevronRight className="w-3 h-3 text-[#707782]" /> : <ChevronLeft className="w-3 h-3 text-[#707782]" />}
+      </button>
+
+      <div
+        className="flex flex-col h-full overflow-hidden transition-all duration-300"
+        style={{ width: collapsed ? 0 : 224, background: '#F1F3F6', minWidth: collapsed ? 0 : 224 }}
+      >
       {/* Logo */}
       <div className="px-4 pt-4 pb-3 flex items-center gap-2">
         <img
@@ -186,6 +200,7 @@ function Sidebar({
             <LogOut className="w-4 h-4" />
           </button>
         </div>
+      </div>
       </div>
     </div>
   )

@@ -239,6 +239,23 @@ function App() {
                 setShowCompose(true)
               } else {
                 setSelectedEmail(email)
+                // Mark as read immediately in local state + API
+                if (email.isRead === false) {
+                  emailAPI.markAsRead(email.id).catch(() => {})
+                  setEmails(prev => prev.map(e =>
+                    e.id === email.id ? { ...e, isRead: true } : e
+                  ))
+                  // Also mark all emails in the thread
+                  if (email._thread) {
+                    const threadIds = new Set(email._thread.map(t => t.id))
+                    setEmails(prev => prev.map(e =>
+                      threadIds.has(e.id) ? { ...e, isRead: true } : e
+                    ))
+                    email._thread.forEach(t => {
+                      if (t.isRead === false) emailAPI.markAsRead(t.id).catch(() => {})
+                    })
+                  }
+                }
               }
             }}
             viewType={currentView}

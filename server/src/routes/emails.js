@@ -8,6 +8,7 @@ import {
   getEmailById,
   deleteEmail,
   starEmail,
+  markAsRead,
   restoreEmail,
   permanentlyDeleteEmail,
   saveDraft,
@@ -40,6 +41,7 @@ router.delete('/drafts/:id', deleteDraft);
 router.get('/:id', getEmailById);
 router.delete('/:id', deleteEmail);
 router.put('/:id/star', starEmail);
+router.put('/:id/read', markAsRead);
 router.put('/:id/restore', restoreEmail);
 router.delete('/:id/permanent', permanentlyDeleteEmail);
 

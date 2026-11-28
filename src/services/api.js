@@ -201,6 +201,14 @@ export const emailAPI = {
 
   getAttachmentUrl: (emailId, attachmentId) =>
     `${API_URL}/emails/${emailId}/attachments/${attachmentId}`,
+
+  markAsRead: async (id) => {
+    const response = await fetch(`${API_URL}/emails/${id}/read`, {
+      method: 'PUT',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
 };
 
 // Knocc API
