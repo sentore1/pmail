@@ -63,6 +63,7 @@ export const sendEmail = async (req, res) => {
     } = req.body;
     const senderId = req.user.id;
     const senderName = req.user.name;
+    const senderUsername = req.user.email.split('@')[0]; // e.g. "sentore.latif"
 
     if (!to || to.length === 0) {
       return res.status(400).json({ error: 'At least one recipient is required' });
@@ -172,6 +173,7 @@ export const sendEmail = async (req, res) => {
           await sendExternalEmail({
             to: ext.email,
             senderName,
+            senderUsername,
             subject,
             body: body || '',
             replyUrl: `${replyUrlBase}${replyToken}`,
