@@ -1,0 +1,49 @@
+═══════════════════════════════════════════════════════════
+  FIX: Emails Not Sending to External Users (Gmail)
+═══════════════════════════════════════════════════════════
+
+Problem: Emails to Gmail/external addresses show message but
+don't actually send because using test email service.
+
+QUICK FIX:
+═══════════════════════════════════════════════════════════
+
+ssh root@vmi3109658
+cd /var/www/pmail-backend/server
+nano .env
+
+Update these lines with REAL credentials:
+
+MAILCOW_API_KEY="<get from mail.pryro.com admin>"
+MAILCOW_SMTP_USER="noreply@pryro.com"
+MAILCOW_SMTP_PASS="<set password in Mailcow>"
+
+Save: Ctrl+X, Y, Enter
+
+pm2 restart pmail-server
+pm2 logs pmail-server --lines 10
+
+LOOK FOR:
+✅ "📧 Mailcow SMTP transport configured for mail.pryro.com"
+❌ "📧 Using Ethereal test email" = still broken
+
+═══════════════════════════════════════════════════════════
+
+GET CREDENTIALS:
+1. Go to: https://mail.pryro.com (admin login)
+2. API Key: System > API > Generate Read-Write Key
+3. Create mailbox: noreply@pryro.com (if not exists)
+4. Set password for noreply@pryro.com
+5. Update .env with API key and password
+
+═══════════════════════════════════════════════════════════
+
+TEST:
+1. Send email from Pmail to your Gmail
+2. Check Gmail inbox (or spam)
+3. Should arrive from noreply@pryro.com
+
+═══════════════════════════════════════════════════════════
+
+See: CONFIGURE_MAILCOW_SMTP.md for detailed guide
+═══════════════════════════════════════════════════════════

@@ -1,0 +1,80 @@
+═══════════════════════════════════════════════════════════
+  QUICK SSH COMMANDS TO FIX "FAILED TO FETCH" ERROR
+═══════════════════════════════════════════════════════════
+
+📤 STEP 1: UPLOAD SCRIPTS (run on your local machine)
+─────────────────────────────────────────────────────────
+scp fix-production.sh root@vmi3109658:/root/
+scp quick-server-check.sh root@vmi3109658:/root/
+
+
+📡 STEP 2: CONNECT TO SERVER
+─────────────────────────────────────────────────────────
+ssh root@vmi3109658
+
+
+🔧 STEP 3: RUN FIX SCRIPT
+─────────────────────────────────────────────────────────
+chmod +x /root/fix-production.sh
+bash /root/fix-production.sh
+
+
+✅ STEP 4: VERIFY SERVER IS RUNNING
+─────────────────────────────────────────────────────────
+pm2 status
+curl http://localhost:5000/api/health
+
+
+📝 STEP 5: CHECK NGINX CONFIGURATION
+─────────────────────────────────────────────────────────
+cat /etc/nginx/sites-available/default | grep -A 10 "/api"
+
+
+🔄 IF NGINX NOT CONFIGURED, ADD THIS:
+─────────────────────────────────────────────────────────
+nano /etc/nginx/sites-available/default
+
+# Add inside server block:
+
+location /api {
+    proxy_pass http://localhost:5000;
+    proxy_http_version 1.1;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection 'upgrade';
+    proxy_set_header Host $host;
+    proxy_cache_bypass $http_upgrade;
+}
+
+# Save: Ctrl+X, Y, Enter
+
+nginx -t
+systemctl reload nginx
+
+
+🌐 STEP 6: TEST PUBLIC API
+─────────────────────────────────────────────────────────
+curl https://login.pryro.com/api/health
+
+
+📊 USEFUL MONITORING COMMANDS
+─────────────────────────────────────────────────────────
+pm2 logs pmail-server              # View logs
+pm2 logs pmail-server --err        # View only errors
+pm2 restart pmail-server           # Restart server
+pm2 monit                          # Live monitoring
+netstat -tlnp | grep :5000         # Check port 5000
+
+
+🔄 IF SERVER NOT IN /var/www/pmail
+─────────────────────────────────────────────────────────
+cd /var/www
+git clone https://github.com/sentore1/pmail.git
+cd pmail/server
+npm install
+npx prisma generate
+npx prisma migrate deploy
+pm2 start src/index.js --name pmail-server
+pm2 save
+
+
+═══════════════════════════════════════════════════════════

@@ -1,0 +1,17 @@
+═══════════════════════════════════════════════════════════
+  QUICK DEPLOY - Remove Banner
+═══════════════════════════════════════════════════════════
+
+Run these commands on SSH:
+
+ssh root@vmi3109658
+
+cd /var/www/pmail-backend
+git pull origin main
+npm run build
+cp -r dist/* /home/pryro.com/mail.pryro.com/app/dist/
+/usr/local/lsws/bin/lswsctrl restart
+
+═══════════════════════════════════════════════════════════
+Done! The banner will be removed.
+═══════════════════════════════════════════════════════════

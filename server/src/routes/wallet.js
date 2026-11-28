@@ -1,5 +1,5 @@
 import express from 'express';
-import { addFunds, getBalance, getTransactions, createLightningInvoice, checkInvoiceStatus, withdrawFunds, createStripePaymentIntent, confirmStripePayment, initiateMomoPayment, checkMomoPayment, momoWebhook, getActiveGateway } from '../controllers/walletController.js';
+import { addFunds, getBalance, getTransactions, createLightningInvoice, checkInvoiceStatus, withdrawFunds, createStripePaymentIntent, confirmStripePayment, initiateMomoPayment, checkMomoPayment, momoWebhook, getActiveGateway, approveMomoSandbox } from '../controllers/walletController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -15,6 +15,7 @@ router.get('/gateway', getActiveGateway);
 // MoMo routes
 router.post('/momo/initiate', initiateMomoPayment);
 router.get('/momo/status/:referenceId', checkMomoPayment);
+router.post('/momo/sandbox-approve/:referenceId', approveMomoSandbox);
 
 // Stripe payment routes
 router.post('/stripe/create-payment-intent', createStripePaymentIntent);

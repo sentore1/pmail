@@ -1,0 +1,97 @@
+═══════════════════════════════════════════════════════════
+  ✅ CODE PUSHED TO GITHUB - NOW DEPLOY VIA SSH
+═══════════════════════════════════════════════════════════
+
+Changes committed:
+✅ Password requirement: 12 → 7 characters
+✅ API URL: https://mail.pryro.com/api
+
+═══════════════════════════════════════════════════════════
+  QUICK SSH DEPLOYMENT
+═══════════════════════════════════════════════════════════
+
+STEP 1: Connect to Server
+─────────────────────────────────────────────────────────
+ssh root@vmi3109658
+
+
+STEP 2: Navigate to Project
+─────────────────────────────────────────────────────────
+cd /var/www/pmail || cd /home/pmail || cd /root/pmail
+
+
+STEP 3: Pull Latest Changes
+─────────────────────────────────────────────────────────
+git pull origin main
+
+
+STEP 4: Install Dependencies
+─────────────────────────────────────────────────────────
+npm install
+
+
+STEP 5: Build Frontend
+─────────────────────────────────────────────────────────
+npm run build
+
+
+STEP 6: Deploy Backend
+─────────────────────────────────────────────────────────
+cd server
+npm install
+npx prisma generate
+pm2 restart pmail-server
+
+
+STEP 7: Configure Web Server (if needed)
+─────────────────────────────────────────────────────────
+Make sure your web server (nginx/apache) serves from:
+  /var/www/pmail/dist
+
+Or copy dist to your web root:
+  cp -r /var/www/pmail/dist/* /path/to/web/root/
+
+
+STEP 8: Test
+─────────────────────────────────────────────────────────
+curl http://localhost:5000/api/health
+curl https://mail.pryro.com/api/health
+
+Then visit: https://mail.pryro.com
+Try creating an account with 7+ character password
+
+
+═══════════════════════════════════════════════════════════
+  AUTOMATED DEPLOYMENT (EASIER)
+═══════════════════════════════════════════════════════════
+
+Upload the script:
+  scp deploy-to-production.sh root@vmi3109658:/root/
+
+Connect and run:
+  ssh root@vmi3109658
+  chmod +x /root/deploy-to-production.sh
+  bash /root/deploy-to-production.sh
+
+
+═══════════════════════════════════════════════════════════
+  TROUBLESHOOTING
+═══════════════════════════════════════════════════════════
+
+If project doesn't exist:
+  cd /var/www
+  git clone https://github.com/sentore1/pmail.git
+  cd pmail
+
+Check PM2 status:
+  pm2 status
+  pm2 logs pmail-server
+
+Check build output:
+  ls -la dist/
+
+View nginx config:
+  cat /etc/nginx/sites-available/default
+
+
+═══════════════════════════════════════════════════════════

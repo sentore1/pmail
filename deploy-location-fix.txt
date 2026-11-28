@@ -1,0 +1,50 @@
+═══════════════════════════════════════════════════════════
+  DEPLOY: Improved IP Geolocation (Rwanda Detection Fix)
+═══════════════════════════════════════════════════════════
+
+Changes Made:
+✅ Switched primary IP provider to ip-api.com (more accurate)
+✅ ipapi.co moved to fallback (was showing South Africa)
+✅ Now should correctly detect Rwanda
+✅ Still has 4 provider fallback system for reliability
+
+═══════════════════════════════════════════════════════════
+
+Deploy on SSH:
+
+ssh root@vmi3109658
+
+# Pull latest code
+cd /var/www/pmail-backend
+git pull origin main
+
+# Backend changes (server)
+cd server
+npm install
+pm2 restart pmail-server
+
+# Frontend rebuild (if needed for banner removal)
+cd ..
+npm run build
+cp -r dist/* /home/pryro.com/mail.pryro.com/app/dist/
+
+# Restart web server
+/usr/local/lsws/bin/lswsctrl restart
+
+═══════════════════════════════════════════════════════════
+
+Test:
+1. Go to https://mail.pryro.com
+2. Start creating an account
+3. On Step 4 (profile), check if:
+   - Country shows "Rwanda" (not South Africa)
+   - Dial code shows "+250" (Rwanda)
+   - No blue banner appears (we removed it)
+
+═══════════════════════════════════════════════════════════
+
+Note: Phone number and age fields will still be EMPTY.
+Users need to fill these manually (we cannot scrape personal
+info from the internet - it's illegal and violates privacy laws).
+
+═══════════════════════════════════════════════════════════

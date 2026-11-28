@@ -512,15 +512,7 @@ function ComposeModal({ onClose, onSendKnoccRequest, replyTo, forwardOf, draft, 
         try { await emailAPI.deleteDraft(draftId) } catch (_) {}
       }
 
-      if (res.externalRecipients?.length) {
-        setError(`Email sent to external addresses via Pmail: ${res.externalRecipients.join(', ')}`)
-        setTimeout(() => onClose(), 3000)
-      } else if (res.unknownRecipients?.length) {
-        setError(`Note: these addresses are not on Pmail and didn't receive the email: ${res.unknownRecipients.join(', ')}`)
-        setTimeout(() => onClose(), 3000)
-      } else {
-        onClose()
-      }
+      onClose()
     } catch (err) {
       setError(err.message || 'Failed to send email')
     } finally {

@@ -120,6 +120,38 @@ export const initiateMomoPayment = async (req, res) => {
   }
 };
 
+// POST sandbox approval — only works in sandbox environment
+// MTN sandbox requires you to call their approve endpoint to simulate payer approval
+export const approveMomoSandbox = async (req, res) => {
+  try {
+    const { referenceId } = req.params;
+    const token = await getMomoToken();
+
+    // MTN sandbox approve endpoint
+    await axios.post(
+      `${MOMO_BASE_URL}/collection/v1_0/requesttopay/${referenceId}/approve`,
+      {},
+      { headers: momoHeaders(token) }
+    );
+
+    res.json({ approved: true });
+  } catch (err) {
+    // Some sandbox versions use a different endpoint — try the callback simulation
+    try {
+      const token = await getMomoToken();
+      await axios.post(
+        `${MOMO_BASE_URL}/collection/v1_0/requesttopay/${referenceId}`,
+        { status: 'SUCCESSFUL' },
+        { headers: momoHeaders(token) }
+      );
+      res.json({ approved: true });
+    } catch (err2) {
+      console.error('Sandbox approve error:', err?.response?.data || err.message);
+      res.status(500).json({ error: 'Sandbox approval failed', detail: err?.response?.data });
+    }
+  }
+};
+
 // GET /collection/v1_0/requesttopay/{referenceId}
 // Status: PENDING | SUCCESSFUL | FAILED
 export const checkMomoPayment = async (req, res) => {

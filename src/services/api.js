@@ -381,6 +381,14 @@ export const walletAPI = {
     return handleResponse(response);
   },
 
+  approveMomoSandbox: async (referenceId) => {
+    const response = await fetch(`${API_URL}/wallet/momo/sandbox-approve/${referenceId}`, {
+      method: 'POST',
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
+
   getActiveGateway: async () => {
     const response = await fetch(`${API_URL}/wallet/gateway`, {
       headers: getAuthHeaders(),
