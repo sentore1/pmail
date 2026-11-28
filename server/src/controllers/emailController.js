@@ -61,9 +61,16 @@ export const sendEmail = async (req, res) => {
       payToReplyEnabled = false,
       replyFee = 0,
     } = req.body;
-    const senderId = req.user.id;
-    const senderName = req.user.name;
-    const senderUsername = req.user.email.split('@')[0]; // e.g. "sentore.latif"
+    const senderId        = req.user.id;
+    const senderName      = req.user.name;
+    const senderUsername  = req.user.email.split('@')[0];
+
+    // Fetch smtpPassword — not exposed in req.user by default
+    const senderRecord    = await prisma.user.findUnique({
+      where: { id: senderId },
+      select: { smtpPassword: true },
+    });
+    const senderSmtpPassword = senderRecord?.smtpPassword || null;
 
     if (!to || to.length === 0) {
       return res.status(400).json({ error: 'At least one recipient is required' });
@@ -174,6 +181,7 @@ export const sendEmail = async (req, res) => {
             to: ext.email,
             senderName,
             senderUsername,
+            senderSmtpPassword,
             subject,
             body: body || '',
             replyUrl: `${replyUrlBase}${replyToken}`,

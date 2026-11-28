@@ -6,6 +6,7 @@ import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
 import { createMailbox } from '../services/mailcowService.js';
 import { evaluateSignupBehavior } from '../services/humanEntropyScorer.js';
+import { encryptSmtpPassword } from '../services/emailService.js';
 
 // ── POST /api/auth/suggest ────────────────────────────────────────────────────
 // Fast sync endpoint — called while user types their name during signup.
@@ -142,6 +143,7 @@ export const register = async (req, res) => {
         gender: gender || null,
         country: country || null,
         knoccPrice: knoccPrice ? parseFloat(knoccPrice) : 1.0,
+        smtpPassword: encryptSmtpPassword(password),
         // Shadow-banned bots: account exists but verified=false blocks sending
         verified: shadowBanned ? false : false, // both start unverified; shadow ban tracked separately
       },

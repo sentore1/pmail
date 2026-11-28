@@ -1,52 +1,73 @@
 import nodemailer from 'nodemailer';
 import crypto from 'crypto';
 
-let transporter = null;
-let etherealInfo = null;
+const MAIL_DOMAIN  = process.env.MAIL_DOMAIN || 'pryro.com';
+const SMTP_HOST    = process.env.MAILCOW_SMTP_HOST || process.env.SMTP_HOST;
+const SMTP_PORT    = parseInt(process.env.MAILCOW_SMTP_PORT || process.env.SMTP_PORT || '587', 10);
+const SMTP_SECURE  = (process.env.MAILCOW_SMTP_SECURE || process.env.SMTP_SECURE) === 'true';
 
-/**
- * Get (or lazily create) the Nodemailer transporter.
- * Priority: Mailcow SMTP > generic SMTP > Ethereal (dev fallback)
- */
+// ── Encryption helpers ────────────────────────────────────────────────────────
+const ALGO    = 'aes-256-cbc';
+const ENC_KEY = Buffer.from(
+  (process.env.SMTP_ENCRYPT_KEY || process.env.JWT_SECRET || 'fallback-32-char-key-padding!!').padEnd(32).slice(0, 32)
+);
+
+export const encryptSmtpPassword = (plain) => {
+  const iv     = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv(ALGO, ENC_KEY, iv);
+  return iv.toString('hex') + ':' + cipher.update(plain, 'utf8', 'hex') + cipher.final('hex');
+};
+
+const decryptSmtpPassword = (encrypted) => {
+  const [ivHex, enc] = encrypted.split(':');
+  const decipher     = crypto.createDecipheriv(ALGO, ENC_KEY, Buffer.from(ivHex, 'hex'));
+  return decipher.update(enc, 'hex', 'utf8') + decipher.final('utf8');
+};
+
+// ── Per-user transporter ──────────────────────────────────────────────────────
+// Authenticates as the actual sender (e.g. sentore.latif@pryro.com) so the
+// From address matches the SMTP auth user — Mailcow requires this.
+const createUserTransporter = (senderEmail, encryptedPass) => {
+  if (!SMTP_HOST) throw new Error('SMTP host not configured (set MAILCOW_SMTP_HOST)');
+  const pass = encryptedPass ? decryptSmtpPassword(encryptedPass) : null;
+  // Fall back to shared noreply creds if user has no stored password yet
+  const auth = pass
+    ? { user: senderEmail, pass }
+    : { user: process.env.MAILCOW_SMTP_USER || process.env.SMTP_USER,
+        pass: process.env.MAILCOW_SMTP_PASS || process.env.SMTP_PASS };
+  return nodemailer.createTransport({
+    host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_SECURE,
+    auth, tls: { rejectUnauthorized: false },
+  });
+};
+
+// ── Shared transporter for system emails (password reset, etc.) ───────────────
+let sharedTransporter = null;
+let etherealInfo      = null;
+
 export const getTransporter = async () => {
-  if (transporter) return transporter;
+  if (sharedTransporter) return sharedTransporter;
 
-  const {
-    MAILCOW_SMTP_HOST, MAILCOW_SMTP_PORT, MAILCOW_SMTP_SECURE,
-    MAILCOW_SMTP_USER, MAILCOW_SMTP_PASS,
-    SMTP_HOST, SMTP_USER, SMTP_PASS, SMTP_PORT, SMTP_SECURE,
-  } = process.env;
-
-  if (MAILCOW_SMTP_HOST && MAILCOW_SMTP_USER && MAILCOW_SMTP_PASS) {
-    transporter = nodemailer.createTransport({
-      host: MAILCOW_SMTP_HOST,
-      port: parseInt(MAILCOW_SMTP_PORT || '587', 10),
-      secure: MAILCOW_SMTP_SECURE === 'true',
-      auth: { user: MAILCOW_SMTP_USER, pass: MAILCOW_SMTP_PASS },
+  if (SMTP_HOST && (process.env.MAILCOW_SMTP_USER || process.env.SMTP_USER)) {
+    sharedTransporter = nodemailer.createTransport({
+      host: SMTP_HOST, port: SMTP_PORT, secure: SMTP_SECURE,
+      auth: {
+        user: process.env.MAILCOW_SMTP_USER || process.env.SMTP_USER,
+        pass: process.env.MAILCOW_SMTP_PASS || process.env.SMTP_PASS,
+      },
       tls: { rejectUnauthorized: false },
     });
-    console.log(`📧 Mailcow SMTP transport configured for ${MAILCOW_SMTP_HOST}`);
-  } else if (SMTP_HOST && SMTP_USER && SMTP_PASS) {
-    transporter = nodemailer.createTransport({
-      host: SMTP_HOST,
-      port: parseInt(SMTP_PORT || '587', 10),
-      secure: SMTP_SECURE === 'true',
-      auth: { user: SMTP_USER, pass: SMTP_PASS },
-    });
-    console.log(`📧 SMTP transport configured for ${SMTP_HOST}:${SMTP_PORT || 587}`);
   } else {
     const testAccount = await nodemailer.createTestAccount();
-    etherealInfo = testAccount;
-    transporter = nodemailer.createTransport({
-      host: 'smtp.ethereal.email',
-      port: 587,
-      secure: false,
+    etherealInfo      = testAccount;
+    sharedTransporter = nodemailer.createTransport({
+      host: 'smtp.ethereal.email', port: 587, secure: false,
       auth: { user: testAccount.user, pass: testAccount.pass },
     });
-    console.log('📧 Using Ethereal test email (dev mode). Preview URLs will be logged on send.');
+    console.log('📧 Using Ethereal test email (dev mode)');
   }
 
-  return transporter;
+  return sharedTransporter;
 };
 
 /**
@@ -112,29 +133,21 @@ const buildOutboundHtml = ({ senderName, subject, body, replyUrl, replyFee }) =>
  * @param {number} params.replyFee     — fee required to reply (0 = free)
  * @returns {object} — Nodemailer info (includes `messageId` and, for Ethereal, `previewUrl`)
  */
-export const sendExternalEmail = async ({ to, senderName, senderUsername, senderPassword, subject, body, replyUrl, replyFee }) => {
-  const transport = await getTransporter();
-
-  const mailDomain = process.env.MAIL_DOMAIN || 'pryro.com';
-  const senderPryroEmail = senderUsername
-    ? `${senderUsername.toLowerCase()}@${mailDomain}`
-    : (process.env.MAILCOW_SMTP_USER || process.env.SMTP_FROM_EMAIL || `noreply@${mailDomain}`);
-  const fromName = senderName || process.env.SMTP_FROM_NAME || 'Pmail';
+export const sendExternalEmail = async ({ to, senderName, senderUsername, senderSmtpPassword, subject, body, replyUrl, replyFee }) => {
+  const mailDomain      = MAIL_DOMAIN;
+  const senderEmail     = `${senderUsername.toLowerCase()}@${mailDomain}`;
+  const transport       = createUserTransporter(senderEmail, senderSmtpPassword);
 
   const info = await transport.sendMail({
-    from: `"${fromName}" <${senderPryroEmail}>`,
-    replyTo: `"${fromName}" <${senderPryroEmail}>`,
+    from:    `"${senderName}" <${senderEmail}>`,
+    replyTo: `"${senderName}" <${senderEmail}>`,
     to,
     subject,
-    html: buildOutboundHtml({ senderName, subject, body, replyUrl, replyFee }),
-    text: `You received a message from ${senderName} via Pmail.\n\nSubject: ${subject}\n\nTo reply, visit: ${replyUrl}${replyFee > 0 ? `\n\nA fee of $${replyFee.toFixed(2)} is required to reply.` : ''}`,
+    html:  buildOutboundHtml({ senderName, subject, body, replyUrl, replyFee }),
+    text:  `You received a message from ${senderName} via Pmail.\n\nSubject: ${subject}\n\nTo reply, visit: ${replyUrl}${replyFee > 0 ? `\n\nA fee of $${replyFee.toFixed(2)} is required to reply.` : ''}`,
   });
 
-  // Log preview URL for Ethereal (dev) so the developer can view the email
-  if (etherealInfo) {
-    const previewUrl = nodemailer.getTestMessageUrl(info);
-    console.log(`📧 Ethereal preview: ${previewUrl}`);
-  }
+  if (etherealInfo) console.log(`📧 Ethereal preview: ${nodemailer.getTestMessageUrl(info)}`);
 
   return info;
 };
