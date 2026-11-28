@@ -252,6 +252,7 @@ function App() {
               setSelectedEmail(null)
             }}
             onDeleteEmails={handleDeleteEmails}
+            onRefresh={handleRefresh}
             searchQuery={globalSearch}
           />
 

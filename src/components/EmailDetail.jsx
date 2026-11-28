@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react'
-import { User, CheckCircle, XCircle, Bell, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, MoreHorizontal, Shield, AlertTriangle } from 'lucide-react'
+import { User, CheckCircle, XCircle, Bell, Globe, DollarSign, X, Star, Trash2, Reply, Forward, Paperclip, Download, ChevronDown, ChevronUp, MoreHorizontal, Shield, AlertTriangle, Loader2, Send } from 'lucide-react'
 import DOMPurify from 'dompurify'
 import { knoccAPI, userAPI, emailAPI, walletAPI, inboundAPI } from '../services/api'
 import ComposeModal from './ComposeModal'
@@ -239,7 +239,7 @@ function EmailDetail({ email, viewType, onClose, onRefresh, onReply, onForward, 
               const colors = ['from-blue-400 to-blue-600', 'from-purple-400 to-purple-600', 'from-green-400 to-green-600', 'from-orange-400 to-orange-600']
               const color = colors[idx % colors.length]
               return (
-                <div key={person.id || idx} className={`border rounded-2xl p-1.5 transition-all ${person._expired ? 'border-amber-200 hover:border-amber-400 bg-amber-50/30' : 'border-gray-200 hover:border-blue-300'}`}>
+                <div key={person.id || idx} className={`rounded-2xl p-1.5 transition-all shadow-sm hover:shadow-md ${person._expired ? 'bg-amber-50/30' : 'bg-white'}`}>
                   <div className="flex items-start justify-between mb-1">
                     <div className="flex items-center gap-1.5 flex-1 min-w-0">
                       <div className={`w-7 h-7 bg-gradient-to-br ${color} rounded-full flex items-center justify-center text-white text-xs font-medium flex-shrink-0`}>{initials}</div>

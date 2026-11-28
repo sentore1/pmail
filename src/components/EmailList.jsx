@@ -12,6 +12,7 @@ function EmailList({
   effectiveView,
   onViewChange,
   onDeleteEmails,
+  onRefresh,
   searchQuery = '',
 }) {
   const isRequestView = viewType === 'knocc-requests'
@@ -186,11 +187,15 @@ function EmailList({
               })}
             </div>
             <div className="flex items-center gap-0.5 ml-auto">
-              <button className="p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors" title="Refresh">
+              <button onClick={onRefresh} className="p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors" title="Refresh">
                 <RefreshCw className="w-3.5 h-3.5 text-[#707782]" />
               </button>
-              <button className="p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors" title="Filter">
-                <Filter className="w-3.5 h-3.5 text-[#707782]" />
+              <button
+                onClick={() => setReadFilter((f) => f === 'all' ? 'unread' : f === 'unread' ? 'read' : 'all')}
+                className={`p-1.5 hover:bg-[#F5F7FA] rounded-full transition-colors ${readFilter !== 'all' ? 'text-[#2563EB]' : ''}`}
+                title={`Filter: ${readFilter}`}
+              >
+                <Filter className={`w-3.5 h-3.5 ${readFilter !== 'all' ? 'text-[#2563EB]' : 'text-[#707782]'}`} />
               </button>
             </div>
           </>
