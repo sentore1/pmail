@@ -112,16 +112,18 @@ const buildOutboundHtml = ({ senderName, subject, body, replyUrl, replyFee }) =>
  * @param {number} params.replyFee     — fee required to reply (0 = free)
  * @returns {object} — Nodemailer info (includes `messageId` and, for Ethereal, `previewUrl`)
  */
-export const sendExternalEmail = async ({ to, senderName, senderUsername, subject, body, replyUrl, replyFee }) => {
+export const sendExternalEmail = async ({ to, senderName, senderUsername, senderPassword, subject, body, replyUrl, replyFee }) => {
   const transport = await getTransporter();
 
-  const fromEmail = senderUsername && process.env.MAILCOW_SMTP_HOST
+  const fromEmail = process.env.MAILCOW_SMTP_USER || process.env.SMTP_FROM_EMAIL || 'noreply@pryro.com';
+  const senderPryroEmail = senderUsername
     ? `${senderUsername.toLowerCase()}@${process.env.MAIL_DOMAIN || 'pryro.com'}`
-    : (process.env.SMTP_FROM_EMAIL || process.env.MAILCOW_SMTP_USER || 'noreply@pryro.com');
+    : fromEmail;
   const fromName = senderName || process.env.SMTP_FROM_NAME || 'Pmail';
 
   const info = await transport.sendMail({
     from: `"${fromName}" <${fromEmail}>`,
+    replyTo: `"${fromName}" <${senderPryroEmail}>`,
     to,
     subject,
     html: buildOutboundHtml({ senderName, subject, body, replyUrl, replyFee }),
