@@ -9,6 +9,7 @@ import SettingsModal from './components/SettingsModal'
 import WalletModal from './components/WalletModal'
 import LoginPage from './components/LoginPage'
 import InviteFriendsModal from './components/InviteFriendsModal'
+import BentoDashboard from './components/BentoDashboard'
 import { authAPI, emailAPI, knoccAPI, userAPI } from './services/api'
 
 function App() {
@@ -32,7 +33,7 @@ function App() {
   const [showSettings, setShowSettings] = useState(false)
   const [showWallet, setShowWallet] = useState(false)
   const [showInvite, setShowInvite] = useState(false)
-  const [currentView, setCurrentView] = useState('inbox')
+  const [currentView, setCurrentView] = useState('dashboard')
   const [inboxView, setInboxView] = useState('inbox')
   const [knoccFilter, setKnoccFilter] = useState('all')
   const [globalSearch, setGlobalSearch] = useState('')
@@ -196,8 +197,9 @@ function App() {
           setSelectedEmail(null)
         }}
         onShowInbox={() => {
-          setCurrentView('inbox')
+          setCurrentView('dashboard')
           setInboxView('inbox')
+          setSelectedEmail(null)
         }}
         onShowSettings={() => setShowSettings(true)}
         onShowWallet={() => setShowWallet(true)}
@@ -228,7 +230,19 @@ function App() {
 
         {/* Email list + detail */}
         <div className="flex flex-1 overflow-hidden">
-          <EmailList
+          {currentView === 'dashboard' && (
+            <BentoDashboard
+              user={user}
+              emails={emails}
+              requests={requests}
+              onCompose={() => setShowCompose(true)}
+              onNavigate={(view) => { setCurrentView(view); setSelectedEmail(null) }}
+              onShowKnoccRequests={() => { setCurrentView('knocc-requests'); setInboxView('all'); setSelectedEmail(null) }}
+              onShowWallet={() => setShowWallet(true)}
+              onSelectEmail={(email) => { setCurrentView('inbox'); setInboxView('inbox'); setSelectedEmail(email) }}
+            />
+          )}
+          {currentView !== 'dashboard' && <EmailList
             emails={getDisplayEmails()}
             selectedEmail={selectedEmail}
             onSelectEmail={(email) => {
@@ -239,22 +253,15 @@ function App() {
                 setShowCompose(true)
               } else {
                 setSelectedEmail(email)
-                // Mark as read immediately in local state + API
-                if (email.isRead === false) {
-                  emailAPI.markAsRead(email.id).catch(() => {})
+                // Mark all thread emails as read
+                const threadEmails = email._thread || [email]
+                const unreadItems = threadEmails.filter(t => t.isRead === false)
+                if (unreadItems.length > 0) {
+                  const threadIds = new Set(threadEmails.map(t => t.id))
                   setEmails(prev => prev.map(e =>
-                    e.id === email.id ? { ...e, isRead: true } : e
+                    threadIds.has(e.id) ? { ...e, isRead: true } : e
                   ))
-                  // Also mark all emails in the thread
-                  if (email._thread) {
-                    const threadIds = new Set(email._thread.map(t => t.id))
-                    setEmails(prev => prev.map(e =>
-                      threadIds.has(e.id) ? { ...e, isRead: true } : e
-                    ))
-                    email._thread.forEach(t => {
-                      if (t.isRead === false) emailAPI.markAsRead(t.id).catch(() => {})
-                    })
-                  }
+                  unreadItems.forEach(t => emailAPI.markAsRead(t.id).catch(() => {}))
                 }
               }
             }}
@@ -271,9 +278,9 @@ function App() {
             onDeleteEmails={handleDeleteEmails}
             onRefresh={handleRefresh}
             searchQuery={globalSearch}
-          />
+          />}
 
-          <EmailDetail
+          {currentView !== 'dashboard' && <EmailDetail
             email={selectedEmail}
             viewType={currentView}
             onClose={() => setSelectedEmail(null)}
@@ -304,7 +311,7 @@ function App() {
               setComposeReplyTo(null)
               setShowCompose(true)
             }}
-          />
+          />}
         </div>
       </div>
 
