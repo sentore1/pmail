@@ -345,7 +345,7 @@ function LoginPage({ onLogin }) {
                   <form onSubmit={handleResetPassword} className="space-y-4">
                     {/* New password */}
                     <div>
-                      <div className="relative flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
+                      <div className="relative flex items-center bg-gray-100 rounded-2xl max-w-xs mt-1">
                         <input
                           type={showResetPassword ? 'text' : 'password'}
                           value={resetPassword}
@@ -356,7 +356,7 @@ function LoginPage({ onLogin }) {
                         />
                         <label 
                           htmlFor="resetPassword"
-                          className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                          className={`absolute left-3 transition-all duration-200 pointer-events-none z-10 ${
                             resetPassword 
                               ? '-top-3 text-xs text-gray-600 px-1' 
                               : 'top-2 text-sm text-gray-400'
@@ -371,7 +371,7 @@ function LoginPage({ onLogin }) {
                     </div>
                     {/* Confirm password */}
                     <div>
-                      <div className="relative flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
+                      <div className="relative flex items-center bg-gray-100 rounded-2xl max-w-xs mt-1">
                         <input
                           type={showResetConfirm ? 'text' : 'password'}
                           value={resetConfirm}
@@ -381,7 +381,7 @@ function LoginPage({ onLogin }) {
                         />
                         <label 
                           htmlFor="resetConfirm"
-                          className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                          className={`absolute left-3 transition-all duration-200 pointer-events-none z-10 ${
                             resetConfirm 
                               ? '-top-3 text-xs text-gray-600 px-1' 
                               : 'top-2 text-sm text-gray-400'
@@ -536,7 +536,7 @@ function LoginPage({ onLogin }) {
 
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
-                    <div className="relative flex items-center max-w-xs bg-gray-100 border-0 rounded-2xl overflow-hidden">
+                    <div className="relative flex items-center max-w-xs bg-gray-100 border-0 rounded-2xl mt-1">
                       <input
                         type={showPassword ? 'text' : 'password'}
                         name="password"
@@ -550,7 +550,7 @@ function LoginPage({ onLogin }) {
                       />
                       <label 
                         htmlFor="loginPassword"
-                        className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                        className={`absolute left-3 transition-all duration-200 pointer-events-none z-10 ${
                           formData.password 
                             ? '-top-3 text-xs text-gray-600 px-1' 
                             : 'top-2 text-sm text-gray-400'
