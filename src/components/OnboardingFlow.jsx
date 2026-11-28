@@ -566,25 +566,6 @@ function OnboardingFlow({ onComplete, onBack }) {
               {/* Step 4: Profile details */}
               {step === 4 && (
                 <>
-                  {/* Show auto-detected data */}
-                  {engineStatus === 'done' && (
-                    <div className="mb-4 p-3 bg-blue-50 rounded-2xl border border-blue-100">
-                      <div className="flex items-center gap-2 mb-2">
-                        <Check className="w-4 h-4 text-blue-600" />
-                        <p className="text-sm text-blue-700 font-medium">Auto-detected from your name</p>
-                      </div>
-                      <p className="text-xs text-blue-600">We've pre-filled some fields based on your name and location. Feel free to update them.</p>
-                    </div>
-                  )}
-
-                  {engineStatus === 'running' && (
-                    <div className="mb-4 p-3 bg-gray-50 rounded-2xl border border-gray-200">
-                      <div className="flex items-center gap-2">
-                        <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
-                        <p className="text-sm text-gray-700">Detecting your information...</p>
-                      </div>
-                    </div>
-                  )}
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
