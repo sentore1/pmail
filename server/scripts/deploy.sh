@@ -30,9 +30,4 @@ npx prisma generate
 log "Restarting backend"
 pm2 restart pmail-backend || pm2 start src/index.js --name pmail-backend
 
-if pm2 describe pmail-webhook > /dev/null 2>&1; then
-  log "Reloading webhook listener"
-  pm2 restart pmail-webhook --update-env || true
-fi
-
 log "Deployment complete"
