@@ -4,11 +4,14 @@ const MAILCOW_URL = process.env.MAILCOW_API_URL; // e.g. https://mail.pryro.com
 const MAILCOW_KEY = process.env.MAILCOW_API_KEY;
 const MAIL_DOMAIN = process.env.MAIL_DOMAIN || 'pryro.com';
 
+import https from 'https';
+const httpsAgent = new https.Agent({ rejectUnauthorized: false });
+
 const api = () => axios.create({
   baseURL: `${MAILCOW_URL}/api/v1`,
   headers: { 'X-API-Key': MAILCOW_KEY, 'Content-Type': 'application/json' },
   timeout: 10000,
-  httpsAgent: new (await import('https')).Agent({ rejectUnauthorized: false }),
+  httpsAgent,
 });
 
 /**
@@ -36,6 +39,22 @@ export const createMailbox = async (username, password, displayName) => {
   } catch (err) {
     console.error('Mailcow mailbox creation failed:', err?.response?.data || err.message);
     return null;
+  }
+};
+
+/**
+ * Update a Mailcow mailbox password (e.g. on password reset).
+ */
+export const updateMailboxPassword = async (username, newPassword) => {
+  if (!MAILCOW_URL || !MAILCOW_KEY) return null;
+  try {
+    await api().post('/edit/mailbox', {
+      attr: { password: newPassword, password2: newPassword },
+      items: [`${username.toLowerCase()}@${MAIL_DOMAIN}`],
+    });
+    console.log(`🔑 Mailcow password updated: ${username}@${MAIL_DOMAIN}`);
+  } catch (err) {
+    console.error('Mailcow password update failed:', err?.response?.data || err.message);
   }
 };
 

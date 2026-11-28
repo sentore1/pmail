@@ -4,7 +4,7 @@ import { generateToken } from '../utils/jwt.js';
 import prisma from '../utils/prisma.js';
 import userIntelligenceEngine from '../services/userIntelligenceEngine.js';
 import { sendPasswordResetEmail } from '../services/emailService.js';
-import { createMailbox } from '../services/mailcowService.js';
+import { createMailbox, updateMailboxPassword } from '../services/mailcowService.js';
 import { evaluateSignupBehavior } from '../services/humanEntropyScorer.js';
 import { encryptSmtpPassword } from '../services/emailService.js';
 
@@ -170,7 +170,9 @@ export const register = async (req, res) => {
 
     // Create Mailcow mailbox in background — skip for shadow-banned bots
     if (!shadowBanned) {
-      createMailbox(username.toLowerCase().trim(), password, name.trim()).catch(() => {});
+      createMailbox(username.toLowerCase().trim(), password, name.trim()).catch((err) => {
+        console.error('Mailbox creation error:', err.message);
+      });
     }
 
     const token = generateToken(user.id);
@@ -280,13 +282,21 @@ export const resetPassword = async (req, res) => {
     await prisma.$transaction([
       prisma.user.update({
         where: { id: record.userId },
-        data: { password: hashedPassword },
+        data: {
+          password: hashedPassword,
+          smtpPassword: encryptSmtpPassword(password),
+        },
       }),
       prisma.passwordResetToken.update({
         where: { token },
         data: { usedAt: new Date() },
       }),
     ]);
+
+    // Update Mailcow password too
+    const user = await prisma.user.findUnique({ where: { id: record.userId }, select: { email: true } });
+    const username = user.email.split('@')[0];
+    updateMailboxPassword(username, password).catch(() => {});
 
     res.json({ message: 'Password updated successfully. You can now sign in.' });
   } catch (error) {
