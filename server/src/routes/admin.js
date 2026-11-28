@@ -7,12 +7,12 @@ import {
   getEntropyRecord,
   labelEntropyRecord,
   getEntropyStats,
+  getSettings,
+  updateSettings,
 } from '../controllers/adminController.js';
 
 const router = express.Router();
 
-// Admin routes require both a valid JWT AND the admin secret header
-// Set ADMIN_SECRET in .env — never expose it publicly
 const requireAdmin = (req, res, next) => {
   const secret = req.headers['x-admin-secret'];
   if (!secret || secret !== process.env.ADMIN_SECRET) {
@@ -23,12 +23,15 @@ const requireAdmin = (req, res, next) => {
 
 router.use(authenticate, requireAdmin);
 
+// Platform settings (payment gateway toggle)
+router.get('/settings', getSettings);
+router.put('/settings', updateSettings);
+
 // Earnings
 router.get('/earnings',       getEarnings);
 router.get('/earnings/stats', getEarningsStats);
 
 // Human Entropy / Bot Detection
-// Stats must come before /:id to avoid route collision
 router.get('/entropy',          getEntropySignups);
 router.get('/entropy/stats',    getEntropyStats);
 router.get('/entropy/:id',      getEntropyRecord);

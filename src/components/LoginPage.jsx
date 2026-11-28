@@ -35,7 +35,15 @@ function LoginPage({ onLogin }) {
         const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
         const lang = navigator.language || navigator.languages?.[0] || null
         const data = await authAPI.suggest(formData.name.trim(), tz, lang)
-        if (data.confidence > 0) setSuggestions(data)
+        if (data.confidence > 0) {
+          setSuggestions(data)
+          setFormData(f => ({
+            ...f,
+            gender: f.gender || data.gender || f.gender,
+            country: f.country || data.country || f.country,
+            age: f.age || (data.ageRange ? String(Math.round((parseInt(data.ageRange.split('-')[0]) + parseInt(data.ageRange.split('-')[1])) / 2)) : f.age),
+          }))
+        }
       } catch { /* silent — suggestions are optional */ }
     }, 400)
     return () => clearTimeout(suggestTimer.current)
@@ -237,14 +245,26 @@ function LoginPage({ onLogin }) {
                   {error && <div className="mb-4 text-sm text-red-600">{error}</div>}
                   <form onSubmit={handleForgotPassword} className="space-y-4">
                     <div className="flex items-center gap-3">
-                      <input
-                        type="text"
-                        value={forgotEmail}
-                        onChange={e => setForgotEmail(e.target.value)}
-                        className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
-                        placeholder="Username or email"
-                        autoFocus
-                      />
+                      <div className="relative flex-1 max-w-xs">
+                        <input
+                          type="text"
+                          value={forgotEmail}
+                          onChange={e => setForgotEmail(e.target.value)}
+                          className="w-full px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                          autoFocus
+                          id="forgotEmail"
+                        />
+                        <label 
+                          htmlFor="forgotEmail"
+                          className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                            forgotEmail 
+                              ? '-top-3 text-xs text-gray-600 px-1' 
+                              : 'top-2 text-sm text-gray-400'
+                          }`}
+                        >
+                          Username or email
+                        </label>
+                      </div>
                       <button
                         type="submit"
                         disabled={loading}
@@ -325,16 +345,25 @@ function LoginPage({ onLogin }) {
                   <form onSubmit={handleResetPassword} className="space-y-4">
                     {/* New password */}
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1">New password</label>
-                      <div className="flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
+                      <div className="relative flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
                         <input
                           type={showResetPassword ? 'text' : 'password'}
                           value={resetPassword}
                           onChange={e => setResetPassword(e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-400"
-                          placeholder="At least 8 characters"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none"
                           autoFocus
+                          id="resetPassword"
                         />
+                        <label 
+                          htmlFor="resetPassword"
+                          className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                            resetPassword 
+                              ? '-top-3 text-xs text-gray-600 px-1' 
+                              : 'top-2 text-sm text-gray-400'
+                          }`}
+                        >
+                          At least 8 characters
+                        </label>
                         <button type="button" onClick={() => setShowResetPassword(!showResetPassword)} className="pr-3 text-gray-500 hover:text-gray-700">
                           {showResetPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -342,15 +371,24 @@ function LoginPage({ onLogin }) {
                     </div>
                     {/* Confirm password */}
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1">Confirm password</label>
-                      <div className="flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
+                      <div className="relative flex items-center bg-gray-100 rounded-2xl overflow-hidden max-w-xs">
                         <input
                           type={showResetConfirm ? 'text' : 'password'}
                           value={resetConfirm}
                           onChange={e => setResetConfirm(e.target.value)}
-                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none placeholder-gray-400"
-                          placeholder="Repeat new password"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none"
+                          id="resetConfirm"
                         />
+                        <label 
+                          htmlFor="resetConfirm"
+                          className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                            resetConfirm 
+                              ? '-top-3 text-xs text-gray-600 px-1' 
+                              : 'top-2 text-sm text-gray-400'
+                          }`}
+                        >
+                          Repeat new password
+                        </label>
                         <button type="button" onClick={() => setShowResetConfirm(!showResetConfirm)} className="pr-3 text-gray-500 hover:text-gray-700">
                           {showResetConfirm ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                         </button>
@@ -423,16 +461,28 @@ function LoginPage({ onLogin }) {
             {step === 1 && (
               <div>
                 <div className="flex items-center gap-3">
-                  <input
-                    type="text"
-                    name="email"
-                    value={formData.email}
-                    onChange={handleChange}
-                    required
-                    className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
-                    placeholder={isLogin ? 'Username or email' : 'Email'}
-                    autoFocus
-                  />
+                  <div className="relative flex-1 max-w-xs">
+                    <input
+                      type="text"
+                      name="email"
+                      value={formData.email}
+                      onChange={handleChange}
+                      required
+                      className="w-full px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
+                      autoFocus
+                      id="loginEmail"
+                    />
+                    <label 
+                      htmlFor="loginEmail"
+                      className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                        formData.email 
+                          ? '-top-3 text-xs text-gray-600 px-1' 
+                          : 'top-2 text-sm text-gray-400'
+                      }`}
+                    >
+                      {isLogin ? 'Username or email' : 'Email'}
+                    </label>
+                  </div>
                   <button
                     type="submit"
                     disabled={loading}
@@ -460,23 +510,33 @@ function LoginPage({ onLogin }) {
                 </div>
 
                 {!isLogin && (
-                  <div>
+                  <div className="relative">
                     <input
                       type="text"
                       name="name"
                       value={formData.name}
                       onChange={handleChange}
                       required
-                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm placeholder-gray-400"
-                      placeholder="First and last name"
+                      className="w-full max-w-xs px-3 py-2 bg-gray-100 border-0 rounded-2xl focus:outline-none text-sm"
                       autoFocus
+                      id="loginName"
                     />
+                    <label 
+                      htmlFor="loginName"
+                      className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                        formData.name 
+                          ? '-top-3 text-xs text-gray-600 px-1' 
+                          : 'top-2 text-sm text-gray-400'
+                      }`}
+                    >
+                      First and last name
+                    </label>
                   </div>
                 )}
 
                 <div className="flex items-start gap-3">
                   <div className="flex-1">
-                    <div className="flex items-center max-w-xs bg-gray-100 border-0 rounded-2xl overflow-hidden">
+                    <div className="relative flex items-center max-w-xs bg-gray-100 border-0 rounded-2xl overflow-hidden">
                       <input
                         type={showPassword ? 'text' : 'password'}
                         name="password"
@@ -484,10 +544,20 @@ function LoginPage({ onLogin }) {
                         onChange={handleChange}
                         required
                         autoComplete="current-password"
-                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-400"
-                        placeholder={isLogin ? 'Enter your password' : 'Create a password'}
+                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
                         autoFocus={isLogin}
+                        id="loginPassword"
                       />
+                      <label 
+                        htmlFor="loginPassword"
+                        className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                          formData.password 
+                            ? '-top-3 text-xs text-gray-600 px-1' 
+                            : 'top-2 text-sm text-gray-400'
+                        }`}
+                      >
+                        {isLogin ? 'Enter your password' : 'Create a password'}
+                      </label>
                       <button
                         type="button"
                         onClick={() => setShowPassword(!showPassword)}
@@ -527,53 +597,7 @@ function LoginPage({ onLogin }) {
               <>
                 <h3 className="text-lg font-medium text-gray-900 mb-1">Complete your profile</h3>
 
-                {/* Suggestion chips — appear when backend inferred something */}
-                {(suggestions.gender || suggestions.country || suggestions.ageRange) && (
-                  <div className="mb-4 p-3 bg-blue-50 rounded-2xl">
-                    <p className="text-xs text-blue-500 font-medium mb-2">Suggested for you</p>
-                    <div className="flex flex-wrap gap-2">
-                      {suggestions.gender && !formData.gender && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData(f => ({ ...f, gender: suggestions.gender }))}
-                          className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 rounded-full text-xs text-blue-700 hover:bg-blue-100 transition-colors"
-                        >
-                          <span className="text-blue-400">Gender</span>
-                          <span className="font-medium capitalize">{suggestions.gender}</span>
-                          <span className="text-blue-300 text-[10px]">tap to apply</span>
-                        </button>
-                      )}
-                      {suggestions.country && !formData.country && (
-                        <button
-                          type="button"
-                          onClick={() => setFormData(f => ({ ...f, country: suggestions.country }))}
-                          className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 rounded-full text-xs text-blue-700 hover:bg-blue-100 transition-colors"
-                        >
-                          <span className="text-blue-400">Country</span>
-                          <span className="font-medium">{suggestions.country}</span>
-                          {suggestions.dialCode && <span className="text-blue-400">{suggestions.dialCode}</span>}
-                          <span className="text-blue-300 text-[10px]">tap to apply</span>
-                        </button>
-                      )}
-                      {suggestions.ageRange && !formData.age && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const mid = suggestions.ageRange.split('-')
-                            const midAge = Math.round((parseInt(mid[0]) + parseInt(mid[1])) / 2)
-                            setFormData(f => ({ ...f, age: String(midAge) }))
-                          }}
-                          className="flex items-center gap-1.5 px-3 py-1 bg-white border border-blue-200 rounded-full text-xs text-blue-700 hover:bg-blue-100 transition-colors"
-                        >
-                          <span className="text-blue-400">Age range</span>
-                          <span className="font-medium">{suggestions.ageRange}</span>
-                          <span className="text-blue-300 text-[10px]">tap to apply</span>
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-[10px] text-blue-400 mt-1.5">Inferred from your name · you can change these</p>
-                  </div>
-                )}
+
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>

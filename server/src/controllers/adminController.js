@@ -103,6 +103,40 @@ export const getEarningsStats = async (req, res) => {
 
 import { evaluateSignupBehavior, THRESHOLDS } from '../services/humanEntropyScorer.js';
 
+// ── GET /api/admin/settings ───────────────────────────────────────────────────
+export const getSettings = async (req, res) => {
+  try {
+    const settings = await prisma.platformSettings.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global', activeGateway: 'MOMO' },
+    });
+    res.json({ settings });
+  } catch (err) {
+    console.error('Get settings error:', err);
+    res.status(500).json({ error: 'Failed to get settings' });
+  }
+};
+
+// ── PUT /api/admin/settings ───────────────────────────────────────────────────
+export const updateSettings = async (req, res) => {
+  try {
+    const { activeGateway } = req.body;
+    if (!['MOMO', 'STRIPE', 'LIGHTNING'].includes(activeGateway)) {
+      return res.status(400).json({ error: 'activeGateway must be MOMO, STRIPE, or LIGHTNING' });
+    }
+    const settings = await prisma.platformSettings.upsert({
+      where: { id: 'global' },
+      update: { activeGateway },
+      create: { id: 'global', activeGateway },
+    });
+    res.json({ settings });
+  } catch (err) {
+    console.error('Update settings error:', err);
+    res.status(500).json({ error: 'Failed to update settings' });
+  }
+};
+
 // ── GET /api/admin/entropy ────────────────────────────────────────────────
 // List all signup entropy records with optional filters.
 // Query params:

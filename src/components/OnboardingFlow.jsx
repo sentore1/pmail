@@ -160,7 +160,7 @@ function OnboardingFlow({ onComplete, onBack }) {
       if (engineFired.current) return
       engineFired.current = true
       runEngine(full)
-    }, 800)
+    }, 600) // Reduced from 800ms to 600ms for faster response
     return () => clearTimeout(timer)
   }, [firstName, lastName])
 
@@ -257,14 +257,35 @@ function OnboardingFlow({ onComplete, onBack }) {
       if (!username.trim()) { setError('Please choose a username'); return }
       if (usernameStatus === 'taken') { setError('That username is taken — pick another'); return }
       if (usernameStatus === 'checking') { setError('Still checking availability…'); return }
-      if (!password) { setError('Please create a password'); return }
-      if (password.length < 8) { setError('Password must be at least 8 characters'); return }
-      if (password !== confirmPassword) { setError('Passwords do not match'); return }
       setStep(3)
       return
     }
 
-    if (step === 3) await handleRegister()
+    if (step === 3) {
+      if (!password) { setError('Please create a password'); return }
+      if (password.length < 12) { setError('Password must be at least 12 characters'); return }
+      
+      // Check for uppercase
+      if (!/[A-Z]/.test(password)) { setError('Password must include at least one uppercase letter'); return }
+      
+      // Check for lowercase
+      if (!/[a-z]/.test(password)) { setError('Password must include at least one lowercase letter'); return }
+      
+      // Check for number
+      if (!/[0-9]/.test(password)) { setError('Password must include at least one number'); return }
+      
+      // Check for at least 1 special character
+      if (!/[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]/.test(password)) { 
+        setError('Password must include at least one special character (!@#$%^&*...)'); 
+        return 
+      }
+      
+      if (password !== confirmPassword) { setError('Passwords do not match'); return }
+      setStep(4)
+      return
+    }
+
+    if (step === 4) await handleRegister()
   }
 
   const handleRegister = async () => {
@@ -300,7 +321,7 @@ function OnboardingFlow({ onComplete, onBack }) {
   }
 
   const inputCls = 'w-full max-w-xs px-3 py-2 border-0 rounded-2xl focus:outline-none text-sm bg-gray-100 placeholder-gray-400'
-  const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl hover:border-gray-400 focus:outline-none focus:border-gray-400 text-sm bg-white'
+  const inputSmCls = 'w-full px-3 py-1.5 border border-gray-300 rounded-2xl focus:outline-none text-sm bg-white'
 
   return (
     <div className="relative min-h-screen bg-white flex flex-col p-8">
@@ -331,7 +352,8 @@ function OnboardingFlow({ onComplete, onBack }) {
             <h2 className="text-2xl font-normal text-gray-900 mb-2">Create your Pmail Account</h2>
             {step === 1 && <p className="text-sm text-gray-600 mb-6">Start with your name</p>}
             {step === 2 && <p className="text-sm text-gray-600 mb-6">Choose your Pmail address</p>}
-            {step === 3 && <p className="text-sm text-gray-600 mb-6">Almost there — fill in your profile</p>}
+            {step === 3 && <p className="text-sm text-gray-600 mb-6">Create a secure password</p>}
+            {step === 4 && <p className="text-sm text-gray-600 mb-6">Almost there — fill in your profile</p>}
 
             {error && (
               <div className="mb-4 text-sm text-red-600">{error}</div>
@@ -353,11 +375,46 @@ function OnboardingFlow({ onComplete, onBack }) {
               {/* Step 1: Name */}
               {step === 1 && (
                 <>
-                  <input type="text" value={firstName} onChange={e => setFirstName(e.target.value)}
-                    placeholder="First name" autoFocus className={inputCls} />
+                  <div className="relative">
+                    <input 
+                      type="text" 
+                      value={firstName} 
+                      onChange={e => setFirstName(e.target.value)}
+                      autoFocus 
+                      className={inputCls}
+                      id="firstName"
+                    />
+                    <label 
+                      htmlFor="firstName"
+                      className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                        firstName 
+                          ? '-top-3 text-xs text-gray-600 px-1' 
+                          : 'top-2 text-sm text-gray-400'
+                      }`}
+                    >
+                      First name
+                    </label>
+                  </div>
                   <div className="flex items-center gap-3">
-                    <input type="text" value={lastName} onChange={e => setLastName(e.target.value)}
-                      placeholder="Last name" className={inputCls} />
+                    <div className="relative flex-1">
+                      <input 
+                        type="text" 
+                        value={lastName} 
+                        onChange={e => setLastName(e.target.value)}
+                        className={inputCls}
+                        id="lastName"
+                      />
+                      <label 
+                        htmlFor="lastName"
+                        className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                          lastName 
+                            ? '-top-3 text-xs text-gray-600 px-1' 
+                            : 'top-2 text-sm text-gray-400'
+                        }`}
+                      >
+                        Last name
+                      </label>
+                    </div>
                     <button type="submit" disabled={loading}
                       className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                       {loading && <Loader2 className="w-4 h-4 animate-spin" />}
@@ -367,7 +424,7 @@ function OnboardingFlow({ onComplete, onBack }) {
                 </>
               )}
 
-              {/* Step 2: Username + Password */}
+              {/* Step 2: Username */}
               {step === 2 && (
                 <>
                   {/* Username picker */}
@@ -389,19 +446,23 @@ function OnboardingFlow({ onComplete, onBack }) {
                       </div>
                     )}
 
-                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl hover:border-gray-400 focus-within:border-gray-400 bg-white overflow-hidden">
+                    <div className="flex items-center max-w-xs border border-gray-300 rounded-2xl bg-white overflow-hidden">
                       <input
                         type="text"
                         value={username}
                         onChange={e => setUsername(e.target.value.toLowerCase().replace(/[^a-z0-9._-]/g, ''))}
-                        placeholder="yourname"
                         autoComplete="off"
                         className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
+                        id="username"
                       />
                       <span className="text-gray-400 text-base pr-2 whitespace-nowrap select-none">@pryro.com</span>
                       <div className="pr-3">
                         {usernameStatus === 'checking' && <Loader2 className="w-4 h-4 text-gray-400 animate-spin" />}
-                        {usernameStatus === 'available' && <Check className="w-4 h-4 text-green-500" />}
+                        {usernameStatus === 'available' && (
+                          <span className="flex items-center justify-center w-5 h-5 rounded-full bg-green-500">
+                            <Check className="w-3 h-3 text-white" strokeWidth={3} />
+                          </span>
+                        )}
                         {usernameStatus === 'taken' && <X className="w-4 h-4 text-red-500" />}
                       </div>
                     </div>
@@ -425,29 +486,9 @@ function OnboardingFlow({ onComplete, onBack }) {
                     <p className="mt-1.5 text-xs text-gray-400">Only letters, numbers, . _ - allowed</p>
                   </div>
 
-                  {/* Password */}
-                  <div className="flex flex-col gap-1.5">
-                    <div className="flex items-center max-w-xs bg-gray-100 rounded-2xl overflow-hidden">
-                      <input type={showPassword ? 'text' : 'password'} value={password}
-                        onChange={e => setPassword(e.target.value)}
-                        placeholder="Create a password"
-                        autoComplete="new-password"
-                        className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0 placeholder-gray-400" />
-                      <button type="button" onClick={() => setShowPassword(!showPassword)}
-                        className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0">
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                    <input type={showPassword ? 'text' : 'password'} value={confirmPassword}
-                      onChange={e => setConfirmPassword(e.target.value)}
-                      autoComplete="new-password"
-                      placeholder="Confirm password" className={inputCls} />
-                  </div>
                   <div className="flex items-start gap-3">
-                    <div className="flex-1">
-                      <p className="text-xs text-gray-500">Use 8 or more characters</p>
-                    </div>
-                    <button type="submit" disabled={loading || usernameStatus === 'checking'}
+                    <div className="flex-1"></div>
+                    <button type="submit" disabled={loading || usernameStatus === 'checking' || usernameStatus === 'taken' || !username}
                       className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
                       {loading && <Loader2 className="w-4 h-4 animate-spin" />}
                       {loading ? 'Creating account…' : 'Next'}
@@ -456,30 +497,128 @@ function OnboardingFlow({ onComplete, onBack }) {
                 </>
               )}
 
-              {/* Step 3: Profile details */}
+              {/* Step 3: Password */}
               {step === 3 && (
                 <>
+                  {/* Password */}
+                  <div className="flex flex-col gap-4">
+                    <div className="relative max-w-xs">
+                      <div className="flex items-center bg-gray-100 rounded-2xl overflow-hidden">
+                        <input 
+                          type={showPassword ? 'text' : 'password'} 
+                          value={password}
+                          onChange={e => setPassword(e.target.value)}
+                          autoComplete="new-password"
+                          className="flex-1 px-3 py-2 text-sm bg-transparent outline-none min-w-0"
+                          id="password"
+                          autoFocus
+                        />
+                        <button type="button" onClick={() => setShowPassword(!showPassword)}
+                          className="pr-3 text-gray-500 hover:text-gray-700 flex-shrink-0">
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                      <label 
+                        htmlFor="password"
+                        className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                          password 
+                            ? '-top-3 text-xs text-gray-600 px-1 z-10' 
+                            : 'top-2 text-sm text-gray-400'
+                        }`}
+                      >
+                        Create a password
+                      </label>
+                    </div>
+                    <div className="relative max-w-xs">
+                      <input 
+                        type={showPassword ? 'text' : 'password'} 
+                        value={confirmPassword}
+                        onChange={e => setConfirmPassword(e.target.value)}
+                        autoComplete="new-password"
+                        className="w-full px-3 py-2 border-0 rounded-2xl focus:outline-none text-sm bg-gray-100"
+                        id="confirmPassword"
+                      />
+                      <label 
+                        htmlFor="confirmPassword"
+                        className={`absolute left-3 transition-all duration-200 pointer-events-none ${
+                          confirmPassword 
+                            ? '-top-3 text-xs text-gray-600 px-1 z-10' 
+                            : 'top-2 text-sm text-gray-400'
+                        }`}
+                      >
+                        Confirm password
+                      </label>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-3">
+                    <div className="flex-1">
+                      <p className="text-xs text-gray-500">At least 12 characters with uppercase, lowercase, number, and special character</p>
+                    </div>
+                    <button type="submit" disabled={loading}
+                      className="px-6 py-2 bg-[#0085FF] hover:bg-[#0070e0] disabled:bg-blue-300 text-white rounded-2xl font-medium transition-colors text-sm flex items-center gap-2 flex-shrink-0">
+                      {loading && <Loader2 className="w-4 h-4 animate-spin" />}
+                      {loading ? 'Creating account…' : 'Next'}
+                    </button>
+                  </div>
+                </>
+              )}
+
+              {/* Step 4: Profile details */}
+              {step === 4 && (
+                <>
+                  {/* Show auto-detected data */}
+                  {engineStatus === 'done' && (
+                    <div className="mb-4 p-3 bg-blue-50 rounded-2xl border border-blue-100">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Check className="w-4 h-4 text-blue-600" />
+                        <p className="text-sm text-blue-700 font-medium">Auto-detected from your name</p>
+                      </div>
+                      <p className="text-xs text-blue-600">We've pre-filled some fields based on your name and location. Feel free to update them.</p>
+                    </div>
+                  )}
+
+                  {engineStatus === 'running' && (
+                    <div className="mb-4 p-3 bg-gray-50 rounded-2xl border border-gray-200">
+                      <div className="flex items-center gap-2">
+                        <Loader2 className="w-4 h-4 text-gray-600 animate-spin" />
+                        <p className="text-sm text-gray-700">Detecting your information...</p>
+                      </div>
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1">Phone (optional)</label>
-                      <input type="tel" value={profile.phoneNumber}
+                      <label className="block text-sm text-gray-700 mb-1.5">Phone (optional)</label>
+                      <input 
+                        type="tel" 
+                        value={profile.phoneNumber}
                         onChange={e => setProfile(p => ({ ...p, phoneNumber: e.target.value }))}
-                        placeholder="+1234567890" className={inputSmCls} />
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl focus:outline-none text-sm bg-white"
+                        placeholder="+1234567890"
+                      />
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1">Age (optional)</label>
-                      <input type="number" value={profile.age}
+                      <label className="block text-sm text-gray-700 mb-1.5">Age (optional)</label>
+                      <input 
+                        type="number" 
+                        value={profile.age}
                         onChange={e => setProfile(p => ({ ...p, age: e.target.value }))}
-                        placeholder="25" min="13" max="120" className={inputSmCls} />
+                        min="13" 
+                        max="120" 
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl focus:outline-none text-sm bg-white"
+                        placeholder="25"
+                      />
                     </div>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1">Gender (optional)</label>
-                      <select value={profile.gender}
+                      <label className="block text-sm text-gray-700 mb-1.5">Gender (optional)</label>
+                      <select 
+                        value={profile.gender}
                         onChange={e => setProfile(p => ({ ...p, gender: e.target.value }))}
-                        className={inputSmCls}>
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl focus:outline-none text-sm bg-white"
+                      >
                         <option value="">Select</option>
                         <option value="male">Male</option>
                         <option value="female">Female</option>
@@ -487,10 +626,12 @@ function OnboardingFlow({ onComplete, onBack }) {
                       </select>
                     </div>
                     <div>
-                      <label className="block text-sm text-gray-700 mb-1">Country</label>
-                      <select value={profile.country}
+                      <label className="block text-sm text-gray-700 mb-1.5">Country</label>
+                      <select 
+                        value={profile.country}
                         onChange={e => setProfile(p => ({ ...p, country: e.target.value }))}
-                        className={inputSmCls}>
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl focus:outline-none text-sm bg-white"
+                      >
                         <option value="">Select Country</option>
                         {COUNTRIES.map(c => <option key={c} value={c}>{c}</option>)}
                       </select>
@@ -499,10 +640,16 @@ function OnboardingFlow({ onComplete, onBack }) {
 
                   <div className="flex items-start gap-3">
                     <div className="flex-1">
-                      <label className="block text-sm text-gray-700 mb-1">Knocc Price ($)</label>
-                      <input type="number" value={profile.knoccPrice}
+                      <label className="block text-sm text-gray-700 mb-1.5">Knocc Price ($)</label>
+                      <input 
+                        type="number" 
+                        value={profile.knoccPrice}
                         onChange={e => setProfile(p => ({ ...p, knoccPrice: e.target.value }))}
-                        min="1" step="0.01" placeholder="1.00" className={inputSmCls} />
+                        min="1" 
+                        step="0.01" 
+                        className="w-full px-3 py-1.5 border border-gray-300 rounded-2xl focus:outline-none text-sm bg-white"
+                        placeholder="1.00"
+                      />
                       <p className="mt-1 text-xs text-gray-500">What people pay to send you a Knocc request</p>
                     </div>
                     <button type="submit" disabled={loading}

@@ -380,6 +380,13 @@ export const walletAPI = {
     });
     return handleResponse(response);
   },
+
+  getActiveGateway: async () => {
+    const response = await fetch(`${API_URL}/wallet/gateway`, {
+      headers: getAuthHeaders(),
+    });
+    return handleResponse(response);
+  },
 };
 
 // Invitation API

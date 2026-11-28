@@ -1,5 +1,5 @@
 import express from 'express';
-import { addFunds, getBalance, getTransactions, createLightningInvoice, checkInvoiceStatus, withdrawFunds, createStripePaymentIntent, confirmStripePayment, initiateMomoPayment, checkMomoPayment, momoWebhook } from '../controllers/walletController.js';
+import { addFunds, getBalance, getTransactions, createLightningInvoice, checkInvoiceStatus, withdrawFunds, createStripePaymentIntent, confirmStripePayment, initiateMomoPayment, checkMomoPayment, momoWebhook, getActiveGateway } from '../controllers/walletController.js';
 import { authenticate } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -8,6 +8,9 @@ const router = express.Router();
 router.post('/momo/webhook', momoWebhook);
 
 router.use(authenticate);
+
+// Active gateway (public to authenticated users)
+router.get('/gateway', getActiveGateway);
 
 // MoMo routes
 router.post('/momo/initiate', initiateMomoPayment);

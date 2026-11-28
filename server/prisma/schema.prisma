@@ -363,6 +363,14 @@ model Invitation {
   @@index([status])
 }
 
+// ─── Platform-wide admin settings ──────────────────────────────────────────
+// Singleton row (id = "global"). Admin can toggle which payment gateway is live.
+model PlatformSettings {
+  id                String  @id @default("global")
+  activeGateway     String  @default("MOMO") // MOMO | STRIPE | LIGHTNING
+  updatedAt         DateTime @updatedAt
+}
+
 // ─── Human Entropy / Bot Detection ──────────────────────────────────────────
 // Stores the result of invisible behavioral analysis performed during signup.
 // verdict: HUMAN | UNCERTAIN | BOT

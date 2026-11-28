@@ -280,6 +280,22 @@ const sendLNPayment = async (paymentRequest) => {
   return r.data;
 };
 
+// ── GET /api/wallet/gateway ───────────────────────────────────────────────────
+// Public (authenticated) — returns the active payment gateway so the UI
+// can show only the relevant payment method.
+export const getActiveGateway = async (req, res) => {
+  try {
+    const settings = await prisma.platformSettings.upsert({
+      where: { id: 'global' },
+      update: {},
+      create: { id: 'global', activeGateway: 'MOMO' },
+    });
+    res.json({ activeGateway: settings.activeGateway });
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to get gateway' });
+  }
+};
+
 // Validate a numeric amount from request body
 const parseAmount = (raw) => {
   const n = parseFloat(raw);

@@ -43,18 +43,15 @@ input:focus::placeholder {
   opacity: 0.5;
 }
 
-/* Subtle gray shadow on focus - override Tailwind focus styles */
-input:focus {
+/* Remove all focus styles from inputs */
+input:focus,
+input:focus-visible,
+select:focus,
+select:focus-visible,
+textarea:focus,
+textarea:focus-visible {
   outline: none !important;
-  border-color: #9ca3af !important;
-  box-shadow: 0 0 0 1px rgba(156, 163, 175, 0.3) !important;
-  ring: 0 !important;
-}
-
-/* Remove Tailwind's focus ring */
-input:focus-visible {
-  outline: none !important;
-  ring: 0 !important;
+  box-shadow: none !important;
 }
 
 /* Compose modal - scrollbar only visible when content overflows */
