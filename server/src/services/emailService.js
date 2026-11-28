@@ -116,7 +116,7 @@ export const sendExternalEmail = async ({ to, senderName, senderUsername, subjec
 
   const fromEmail = senderUsername && process.env.MAILCOW_SMTP_HOST
     ? `${senderUsername.toLowerCase()}@${process.env.MAIL_DOMAIN || 'pryro.com'}`
-    : (process.env.SMTP_FROM_EMAIL || 'noreply@pmail.app');
+    : (process.env.SMTP_FROM_EMAIL || process.env.MAILCOW_SMTP_USER || 'noreply@pryro.com');
   const fromName = senderName || process.env.SMTP_FROM_NAME || 'Pmail';
 
   const info = await transport.sendMail({
