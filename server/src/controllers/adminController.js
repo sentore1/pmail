@@ -137,6 +137,38 @@ export const updateSettings = async (req, res) => {
   }
 };
 
+// ── GET /api/admin/users ──────────────────────────────────────────────────────
+export const getUsers = async (req, res) => {
+  try {
+    const { page = 1, limit = 50, search } = req.query;
+    const skip = (parseInt(page) - 1) * parseInt(limit);
+    const where = search ? {
+      OR: [
+        { name: { contains: search } },
+        { email: { contains: search } },
+      ],
+    } : {};
+    const [users, total] = await Promise.all([
+      prisma.user.findMany({
+        where,
+        skip,
+        take: parseInt(limit),
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true, name: true, email: true, country: true,
+          verified: true, isAdmin: true, walletBalance: true,
+          knoccPrice: true, createdAt: true,
+        },
+      }),
+      prisma.user.count({ where }),
+    ]);
+    res.json({ users, pagination: { page: parseInt(page), limit: parseInt(limit), total, pages: Math.ceil(total / parseInt(limit)) } });
+  } catch (err) {
+    console.error('Admin get users error:', err);
+    res.status(500).json({ error: 'Failed to get users' });
+  }
+};
+
 // ── GET /api/admin/entropy ────────────────────────────────────────────────
 // List all signup entropy records with optional filters.
 // Query params:

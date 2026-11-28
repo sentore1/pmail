@@ -4,11 +4,13 @@ import App from './App'
 import ReplyPage from './components/ReplyPage'
 import InboundPayPage from './components/InboundPayPage'
 import InboundSendPage from './components/InboundSendPage'
+import AdminPage from './components/AdminPage'
 import './index.css'
 
 const params = new URLSearchParams(window.location.search)
+const isAdmin = window.location.pathname === '/admin'
 
-// ?reply=<token>   — edxfternal user paying to reply to an outbound email
+// ?reply=<token>   — external user paying to reply to an outbound email
 const replyToken = params.get('reply')
 
 // ?inbound=<token> — external sender paying the inbound delivery fee
@@ -19,7 +21,9 @@ const sendTo = params.get('send')
 
 let root
 
-if (replyToken) {
+if (isAdmin) {
+  root = <AdminPage />
+} else if (replyToken) {
   root = <ReplyPage token={replyToken} />
 } else if (inboundToken) {
   root = <InboundPayPage token={inboundToken} />

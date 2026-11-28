@@ -33,6 +33,7 @@ export const authenticate = async (req, res, next) => {
         requireReason: true,
         chatExpiryMonths: true,
         inboundFee: true,
+        isAdmin: true,
       },
     });
 

@@ -39,6 +39,7 @@ model User {
   // Inbound fee: cost for an external (non-Pryro) user to send an email to this user.
   // 0 = free (email delivered immediately). > 0 = sender must pay before email is revealed.
   inboundFee        Float     @default(0.0)
+  isAdmin           Boolean   @default(false)
 
   // Gmail AI learning
   gmailAccessEnabled Boolean  @default(false)
